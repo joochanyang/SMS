@@ -1,0 +1,84 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  credits       Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  logs          SmsLog[]
+  campaigns     SmsCampaign[]
+  transactions  Transaction[]
+}
+
+model SmsCampaign {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  name            String?
+  messageBody     String
+  messageType     String   @default("TRANSACTIONAL") // TRANSACTIONAL, AD
+
+  status          String   @default("DRAFT") // DRAFT, QUEUED, SENDING, COMPLETED, CANCELLED, FAILED
+  totalRecipients Int      @default(0)
+  processedCount  Int      @default(0)
+  deliveredCount  Int      @default(0)
+  failedCount     Int      @default(0)
+
+  costPerMessage  Float    @default(0.05)
+  estimatedCost   Float    @default(0)
+  dynamicBatchSize Int     @default(200)
+  tempFailureStreak Int    @default(0)
+  cooldownUntil   DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  logs            SmsLog[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model SmsLog {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  campaignId    String?
+  campaign      SmsCampaign? @relation(fields: [campaignId], references: [id])
+  targetNumber  String
+  messageBody   String
+  status        String    @default("PENDING") // PENDING, SENT, RETRY_PENDING, DELIVERED, FAILED
+  cost          Float     @default(0)
+  messageId     String?   @unique // Infobip specific message ID
+  providerStatus String?
+  providerError  String?
+  retryCount     Int       @default(0)
+  nextRetryAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  amount        Float
+  type          String    // DEPOSIT, WITHDRAWAL
+  description   String?
+  createdAt     DateTime  @default(now())
+}
