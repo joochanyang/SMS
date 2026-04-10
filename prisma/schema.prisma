@@ -7,17 +7,25 @@ generator client {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  name          String?
-  credits       Float     @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  logs          SmsLog[]
-  campaigns     SmsCampaign[]
-  transactions  Transaction[]
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String?
+  credits         Float     @default(0)
+  status          String    @default("ACTIVE")    // ACTIVE, SUSPENDED, BANNED
+  suspendedAt     DateTime?
+  suspendReason   String?
+  dailySendLimit  Int       @default(10000)
+  maxCampaignSize Int       @default(5000)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  logs            SmsLog[]
+  campaigns       SmsCampaign[]
+  transactions    Transaction[]
+  creditLedger    CreditLedger[]
+  templates       MessageTemplate[]
+  refundRequests  RefundRequest[]
 }
 
 model SmsCampaign {
@@ -81,4 +89,183 @@ model Transaction {
   type          String    // DEPOSIT, WITHDRAWAL
   description   String?
   createdAt     DateTime  @default(now())
+}
+
+// ===== 관리자 시스템 =====
+
+model AdminUser {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                String    @default("VIEWER")    // SUPER_ADMIN, ADMIN, SUPPORT, VIEWER
+  status              String    @default("ACTIVE")    // ACTIVE, LOCKED, DISABLED
+  mfaSecret           String?
+  mfaEnabled          Boolean   @default(false)
+  mfaBackupCodes      String[]  @default([])
+  allowedIps          String[]  @default([])
+  failedLoginCount    Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime  @default(now())
+  previousPasswords   String[]  @default([])
+  dailyCreditLimit    Float     @default(5000000)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lastLoginAt         DateTime?
+  createdById         String?
+  createdBy           AdminUser?  @relation("AdminCreator", fields: [createdById], references: [id])
+  createdAdmins       AdminUser[] @relation("AdminCreator")
+  sessions            AdminSession[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([role, status])
+}
+
+model AdminSession {
+  id              String    @id @default(cuid())
+  adminId         String
+  admin           AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  sessionToken    String    @unique
+  ipAddress       String
+  userAgent       String?
+  expiresAt       DateTime
+  lastActivityAt  DateTime  @default(now())
+  mfaVerified     Boolean   @default(false)
+  sudoUntil       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([sessionToken])
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  timestamp     DateTime  @default(now())
+  adminId       String
+  admin         AdminUser @relation(fields: [adminId], references: [id])
+  adminEmail    String
+  action        String
+  targetType    String
+  targetId      String?
+  previousValue Json?
+  newValue      Json?
+  reason        String
+  ipAddress     String
+  userAgent     String?
+  result        String    @default("SUCCESS")
+  metadata      Json?
+
+  @@index([adminId, timestamp])
+  @@index([action, timestamp])
+  @@index([targetType, targetId, timestamp])
+  @@index([timestamp])
+}
+
+model SystemSetting {
+  key          String   @id
+  value        Json
+  category     String
+  description  String?
+  isSensitive  Boolean  @default(false)
+  updatedAt    DateTime @default(now()) @updatedAt
+  updatedById  String?
+
+  @@index([category])
+}
+
+model Blacklist {
+  id           String    @id @default(cuid())
+  phoneNumber  String
+  phoneHash    String
+  type         String
+  reason       String?
+  source       String?
+  userId       String?
+  isGlobal     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  createdById  String?
+  expiresAt    DateTime?
+
+  @@unique([phoneHash, userId])
+  @@index([phoneHash])
+  @@index([type])
+  @@index([userId])
+}
+
+model CreditLedger {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  type            String
+  amount          Float
+  balanceAfter    Float
+  referenceType   String?
+  referenceId     String?
+  description     String
+  adminId         String?
+  idempotencyKey  String?   @unique
+  createdAt       DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model RateLimitConfig {
+  id              String    @id @default(cuid())
+  targetType      String
+  targetId        String?
+  maxPerSecond    Int?
+  maxPerMinute    Int?
+  maxPerHour      Int?
+  maxPerDay       Int?
+  maxPerCampaign  Int?
+  maxCostPerDay   Float?
+  maxCostPerMonth Float?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  updatedById     String?
+
+  @@index([targetType, targetId])
+}
+
+model MessageTemplate {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  name          String
+  content       String
+  type          String
+  status        String    @default("PENDING")
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  variables     String[]  @default([])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+model RefundRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  amount          Float
+  reason          String
+  evidence        Json?
+  status          String    @default("PENDING")
+  requestedAt     DateTime  @default(now())
+  l1ApprovedById  String?
+  l1ApprovedAt    DateTime?
+  l2ApprovedById  String?
+  l2ApprovedAt    DateTime?
+  executedAt      DateTime?
+  rejectReason    String?
+
+  @@index([userId, status])
+  @@index([status])
 }

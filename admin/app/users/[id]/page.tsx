@@ -1,0 +1,460 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import {
+  ArrowLeft, User as UserIcon, CreditCard, MessageSquare,
+  Ban, ShieldOff, ShieldCheck, Plus, Minus,
+} from 'lucide-react';
+import Sidebar from '@/components/sidebar';
+import Header from '@/components/header';
+import DataTable, { Column } from '@/components/data-table';
+import ConfirmModal from '@/components/confirm-modal';
+
+interface AdminInfo { name: string; email: string; role: string }
+
+interface UserDetail {
+  id: string;
+  email: string;
+  name: string;
+  credits: number;
+  status: string;
+  dailySendLimit: number;
+  maxCampaignSize: number;
+  suspendedAt: string | null;
+  suspendReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LedgerEntry {
+  id: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  createdAt: string;
+}
+
+interface CampaignEntry {
+  id: string;
+  name: string;
+  status: string;
+  totalRecipients: number;
+  deliveredCount: number;
+  failedCount: number;
+  estimatedCost: number;
+  createdAt: string;
+}
+
+const statusMap: Record<string, string> = { ACTIVE: '활성', SUSPENDED: '정지', BANNED: '차단' };
+const badgeClassMap: Record<string, string> = { ACTIVE: 'badge-active', SUSPENDED: 'badge-suspended', BANNED: 'badge-banned' };
+const ledgerTypeMap: Record<string, string> = {
+  ADMIN_ADD: '관리자 충전', ADMIN_DEDUCT: '관리자 차감', CORRECTION: '보정',
+  BONUS: '보너스', REFUND: '환불', SMS_COST: 'SMS 비용', DEPOSIT: '입금',
+};
+
+export default function UserDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const userId = params.id as string;
+
+  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const [user, setUser] = useState<UserDetail | null>(null);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [killSwitch, setKillSwitch] = useState(false);
+
+  // Modals
+  const [suspendModal, setSuspendModal] = useState<{ open: boolean; action: string }>({ open: false, action: '' });
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendLoading, setSuspendLoading] = useState(false);
+
+  const [creditModal, setCreditModal] = useState(false);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditType, setCreditType] = useState<'ADMIN_ADD' | 'ADMIN_DEDUCT'>('ADMIN_ADD');
+  const [creditReason, setCreditReason] = useState('');
+  const [creditLoading, setCreditLoading] = useState(false);
+
+  const [editModal, setEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDailyLimit, setEditDailyLimit] = useState('');
+  const [editMaxCampaign, setEditMaxCampaign] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [sessionRes, userRes] = await Promise.all([
+        fetch('/api/auth/session'),
+        fetch(`/api/users/${userId}`),
+      ]);
+
+      if (!sessionRes.ok) { router.push('/login'); return; }
+
+      const sessionData = await sessionRes.json();
+      setAdmin(sessionData.admin);
+      setKillSwitch(sessionData.killSwitch ?? false);
+
+      if (userRes.ok) {
+        const data = await userRes.json();
+        setUser(data.user);
+        setLedger(data.recentLedger ?? []);
+        setCampaigns(data.recentCampaigns ?? []);
+      }
+    } catch {
+      router.push('/login');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, router]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  async function handleSuspend() {
+    if (!suspendReason || suspendReason.length < 10) return;
+    setSuspendLoading(true);
+    try {
+      const res = await fetch(`/api/users/${userId}/suspend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: suspendModal.action, reason: suspendReason }),
+      });
+      if (res.ok) {
+        setSuspendModal({ open: false, action: '' });
+        setSuspendReason('');
+        await fetchData();
+      }
+    } finally {
+      setSuspendLoading(false);
+    }
+  }
+
+  async function handleCreditAdjust() {
+    const amount = parseFloat(creditAmount);
+    if (isNaN(amount) || amount <= 0 || creditReason.length < 10) return;
+    setCreditLoading(true);
+    try {
+      const res = await fetch(`/api/users/${userId}/credits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: creditType === 'ADMIN_DEDUCT' ? -amount : amount,
+          type: creditType,
+          reason: creditReason,
+        }),
+      });
+      if (res.ok) {
+        setCreditModal(false);
+        setCreditAmount('');
+        setCreditReason('');
+        await fetchData();
+      }
+    } finally {
+      setCreditLoading(false);
+    }
+  }
+
+  async function handleEdit() {
+    if (editReason.length < 5) return;
+    setEditLoading(true);
+    try {
+      const body: any = { reason: editReason };
+      if (editName) body.name = editName;
+      if (editDailyLimit) body.dailySendLimit = parseInt(editDailyLimit);
+      if (editMaxCampaign) body.maxCampaignSize = parseInt(editMaxCampaign);
+
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setEditModal(false);
+        await fetchData();
+      }
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  const ledgerColumns: Column<LedgerEntry>[] = [
+    {
+      key: 'type', label: '유형',
+      render: (row) => <span className={`badge ${row.amount >= 0 ? 'badge-active' : 'badge-suspended'}`}>{ledgerTypeMap[row.type] ?? row.type}</span>,
+    },
+    {
+      key: 'amount', label: '금액',
+      render: (row) => (
+        <span style={{ color: row.amount >= 0 ? 'var(--status-success)' : 'var(--status-danger)', fontWeight: 600 }}>
+          {row.amount >= 0 ? '+' : ''}{'\u20A9'}{row.amount.toLocaleString('ko-KR')}
+        </span>
+      ),
+    },
+    {
+      key: 'balanceAfter', label: '잔액',
+      render: (row) => <span>{'\u20A9'}{row.balanceAfter.toLocaleString('ko-KR')}</span>,
+    },
+    { key: 'description', label: '설명' },
+    {
+      key: 'createdAt', label: '일시',
+      render: (row) => new Date(row.createdAt).toLocaleString('ko-KR'),
+    },
+  ];
+
+  const campaignColumns: Column<CampaignEntry>[] = [
+    { key: 'name', label: '캠페인명', render: (row) => row.name ?? '-' },
+    {
+      key: 'status', label: '상태',
+      render: (row) => <span className="badge badge-muted">{row.status}</span>,
+    },
+    {
+      key: 'progress', label: '진행',
+      render: (row) => `${row.deliveredCount}/${row.totalRecipients} (실패: ${row.failedCount})`,
+    },
+    {
+      key: 'estimatedCost', label: '비용',
+      render: (row) => `\u20A9${row.estimatedCost.toLocaleString('ko-KR')}`,
+    },
+    {
+      key: 'createdAt', label: '생성일',
+      render: (row) => new Date(row.createdAt).toLocaleDateString('ko-KR'),
+    },
+  ];
+
+  if (!admin || loading) {
+    return (
+      <div className="loading-center" style={{ minHeight: '100vh' }}>
+        <span className="spinner spinner-lg" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-layout">
+      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
+      <div className="admin-main">
+        <Header title="사용자 상세" killSwitchActive={killSwitch} adminName={admin.name} />
+        <main className="admin-content">
+          {/* Back button */}
+          <button className="btn btn-ghost" onClick={() => router.push('/users')} style={{ marginBottom: '16px' }}>
+            <ArrowLeft size={16} /> 목록으로
+          </button>
+
+          {user ? (
+            <>
+              {/* User profile card */}
+              <div className="card" style={{ marginBottom: '24px' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <UserIcon size={18} /> 사용자 정보
+                  </h3>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => {
+                      setEditName(user.name ?? '');
+                      setEditDailyLimit(String(user.dailySendLimit));
+                      setEditMaxCampaign(String(user.maxCampaignSize));
+                      setEditReason('');
+                      setEditModal(true);
+                    }}>
+                      수정
+                    </button>
+                    {user.status === 'ACTIVE' && (
+                      <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'SUSPEND' })}>
+                        <Ban size={14} /> 정지
+                      </button>
+                    )}
+                    {user.status === 'SUSPENDED' && (
+                      <button className="btn btn-outline btn-sm" onClick={() => setSuspendModal({ open: true, action: 'UNSUSPEND' })}>
+                        <ShieldCheck size={14} /> 해제
+                      </button>
+                    )}
+                    {user.status !== 'BANNED' && (
+                      <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'BAN' })}>
+                        <ShieldOff size={14} /> 차단
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+                    <div><span className="label">이메일</span><p>{user.email}</p></div>
+                    <div><span className="label">이름</span><p>{user.name ?? '-'}</p></div>
+                    <div>
+                      <span className="label">상태</span>
+                      <p><span className={`badge ${badgeClassMap[user.status] ?? 'badge-muted'}`}><span className="badge-dot" />{statusMap[user.status] ?? user.status}</span></p>
+                    </div>
+                    <div>
+                      <span className="label">크레딧</span>
+                      <p style={{ fontWeight: 700, fontSize: '18px' }}>{'\u20A9'}{user.credits.toLocaleString('ko-KR')}</p>
+                    </div>
+                    <div><span className="label">일일 발송 한도</span><p>{user.dailySendLimit.toLocaleString('ko-KR')}건</p></div>
+                    <div><span className="label">최대 캠페인 크기</span><p>{user.maxCampaignSize.toLocaleString('ko-KR')}건</p></div>
+                    <div><span className="label">가입일</span><p>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</p></div>
+                    {user.suspendedAt && (
+                      <div><span className="label">정지/차단일</span><p>{new Date(user.suspendedAt).toLocaleString('ko-KR')}</p></div>
+                    )}
+                    {user.suspendReason && (
+                      <div style={{ gridColumn: 'span 2' }}><span className="label">사유</span><p>{user.suspendReason}</p></div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Credit adjustment button */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button className="btn btn-primary btn-sm" onClick={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}>
+                  <Plus size={14} /> 크레딧 충전
+                </button>
+                <button className="btn btn-outline-danger btn-sm" onClick={() => { setCreditType('ADMIN_DEDUCT'); setCreditModal(true); }}>
+                  <Minus size={14} /> 크레딧 차감
+                </button>
+              </div>
+
+              {/* Credit history */}
+              <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
+                <div className="data-table-header">
+                  <h3 className="data-table-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CreditCard size={16} /> 크레딧 내역 (최근 20건)
+                  </h3>
+                </div>
+                <DataTable
+                  columns={ledgerColumns}
+                  data={ledger}
+                  loading={false}
+                  keyExtractor={(row) => row.id}
+                  emptyMessage="크레딧 내역이 없습니다"
+                />
+              </div>
+
+              {/* Campaign history */}
+              <div className="data-table-wrapper">
+                <div className="data-table-header">
+                  <h3 className="data-table-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <MessageSquare size={16} /> 캠페인 내역 (최근 10건)
+                  </h3>
+                </div>
+                <DataTable
+                  columns={campaignColumns}
+                  data={campaigns}
+                  loading={false}
+                  onRowClick={(row) => router.push(`/campaigns/${row.id}`)}
+                  keyExtractor={(row) => row.id}
+                  emptyMessage="캠페인 내역이 없습니다"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="card"><div className="card-body"><p>유저를 찾을 수 없습니다.</p></div></div>
+          )}
+        </main>
+      </div>
+
+      {/* Suspend/Ban Modal */}
+      <ConfirmModal
+        isOpen={suspendModal.open}
+        onClose={() => { setSuspendModal({ open: false, action: '' }); setSuspendReason(''); }}
+        onConfirm={handleSuspend}
+        title={suspendModal.action === 'SUSPEND' ? '유저 정지' : suspendModal.action === 'UNSUSPEND' ? '정지 해제' : '유저 차단'}
+        message=""
+        confirmText={suspendModal.action === 'UNSUSPEND' ? '해제' : '확인'}
+        danger={suspendModal.action !== 'UNSUSPEND'}
+        loading={suspendLoading}
+      >
+        <div style={{ marginBottom: '12px' }}>
+          <label className="label">사유 (10자 이상)</label>
+          <textarea
+            className="input"
+            rows={3}
+            value={suspendReason}
+            onChange={(e) => setSuspendReason(e.target.value)}
+            placeholder="사유를 입력하세요..."
+            style={{ width: '100%', resize: 'vertical' }}
+          />
+        </div>
+      </ConfirmModal>
+
+      {/* Credit Adjustment Modal */}
+      {creditModal && (
+        <div className="modal-overlay" onClick={() => setCreditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <h3 style={{ marginBottom: '16px' }}>
+              {creditType === 'ADMIN_ADD' ? '크레딧 충전' : '크레딧 차감'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label className="label">금액 (원)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  placeholder="금액을 입력하세요"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label className="label">사유 (10자 이상)</label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  value={creditReason}
+                  onChange={(e) => setCreditReason(e.target.value)}
+                  placeholder="사유를 입력하세요..."
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={() => setCreditModal(false)}>취소</button>
+                <button
+                  className={`btn ${creditType === 'ADMIN_ADD' ? 'btn-primary' : 'btn-danger'}`}
+                  disabled={creditLoading || !creditAmount || creditReason.length < 10}
+                  onClick={handleCreditAdjust}
+                >
+                  {creditLoading && <span className="spinner" />}
+                  {creditType === 'ADMIN_ADD' ? '충전' : '차감'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editModal && (
+        <div className="modal-overlay" onClick={() => setEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <h3 style={{ marginBottom: '16px' }}>사용자 정보 수정</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label className="label">이름</label>
+                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">일일 발송 한도</label>
+                <input className="input" type="number" value={editDailyLimit} onChange={(e) => setEditDailyLimit(e.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">최대 캠페인 크기</label>
+                <input className="input" type="number" value={editMaxCampaign} onChange={(e) => setEditMaxCampaign(e.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">사유 (5자 이상)</label>
+                <textarea className="input" rows={2} value={editReason} onChange={(e) => setEditReason(e.target.value)} placeholder="변경 사유..." style={{ width: '100%', resize: 'vertical' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={() => setEditModal(false)}>취소</button>
+                <button className="btn btn-primary" disabled={editLoading || editReason.length < 5} onClick={handleEdit}>
+                  {editLoading && <span className="spinner" />} 저장
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

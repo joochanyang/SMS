@@ -1,0 +1,117 @@
+/**
+ * Audit Trail System for SovereignSMS Admin Panel
+ *
+ * Every admin action touching credits, users, or system settings
+ * is logged immutably with IP, user-agent, before/after values.
+ */
+
+import { NextRequest } from 'next/server';
+import { prisma } from '@shared/prisma';
+
+interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  name: string;
+}
+
+export interface AuditParams {
+  adminId: string;
+  adminEmail: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  previousValue?: any;
+  newValue?: any;
+  reason: string;
+  req: NextRequest;
+  result?: 'SUCCESS' | 'FAILURE';
+  metadata?: any;
+}
+
+/**
+ * Extract client IP from the request.
+ * Checks x-forwarded-for, x-real-ip, then falls back to 'unknown'.
+ */
+function extractIp(req: NextRequest): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // x-forwarded-for may contain multiple IPs; take the first (client)
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers.get('x-real-ip') ?? 'unknown';
+}
+
+/**
+ * Extract user-agent string from the request.
+ */
+function extractUserAgent(req: NextRequest): string | null {
+  return req.headers.get('user-agent') ?? null;
+}
+
+/**
+ * Create an immutable audit log entry.
+ *
+ * This function never throws — audit failures are logged to console
+ * but must not break the main operation flow.
+ */
+export async function logAudit(params: AuditParams): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        adminId: params.adminId,
+        adminEmail: params.adminEmail,
+        action: params.action,
+        targetType: params.targetType,
+        targetId: params.targetId ?? null,
+        previousValue: params.previousValue !== undefined ? params.previousValue : undefined,
+        newValue: params.newValue !== undefined ? params.newValue : undefined,
+        reason: params.reason,
+        ipAddress: extractIp(params.req),
+        userAgent: extractUserAgent(params.req),
+        result: params.result ?? 'SUCCESS',
+        metadata: params.metadata !== undefined ? params.metadata : undefined,
+      },
+    });
+  } catch (err) {
+    // Audit failures must not crash the main flow — log and continue
+    console.error('[AUDIT] Failed to write audit log:', err, {
+      action: params.action,
+      adminId: params.adminId,
+      targetType: params.targetType,
+      targetId: params.targetId,
+    });
+  }
+}
+
+/**
+ * Convenience wrapper — shorter signature for common admin actions.
+ */
+export async function logAdminAction(
+  admin: AdminUser,
+  action: string,
+  targetType: string,
+  targetId: string | undefined,
+  reason: string,
+  req: NextRequest,
+  opts?: {
+    previousValue?: any;
+    newValue?: any;
+    result?: 'SUCCESS' | 'FAILURE';
+    metadata?: any;
+  },
+): Promise<void> {
+  await logAudit({
+    adminId: admin.id,
+    adminEmail: admin.email,
+    action,
+    targetType,
+    targetId,
+    reason,
+    req,
+    previousValue: opts?.previousValue,
+    newValue: opts?.newValue,
+    result: opts?.result,
+    metadata: opts?.metadata,
+  });
+}
