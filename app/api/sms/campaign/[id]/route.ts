@@ -121,7 +121,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const unprocessedCount = updateResult.count;
 
       // 환불 금액 계산
-      const refundAmount = unprocessedCount * campaign.costPerMessage;
+      const refundAmount = unprocessedCount * Number(campaign.costPerMessage);
 
       if (refundAmount > 0) {
         // 크레딧 환불 (atomic increment)

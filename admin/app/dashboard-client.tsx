@@ -60,7 +60,7 @@ interface DashboardStats {
 
 interface AdminInfo {
   name: string;
-  email: string;
+  username: string;
   role: string;
 }
 
@@ -132,7 +132,7 @@ export default function DashboardClient() {
     <div className="admin-layout">
       <Sidebar
         adminName={admin.name}
-        adminEmail={admin.email}
+        adminEmail={admin.username}
         adminRole={admin.role}
         killSwitchActive={killSwitchActive}
       />
@@ -320,7 +320,7 @@ export default function DashboardClient() {
               </span>
             </div>
             <div className="system-status-item">
-              <span className="system-status-label">Kill Switch</span>
+              <span className="system-status-label">긴급 중지</span>
               <span className="system-status-value">
                 <Power size={14} />
                 <span

@@ -16,7 +16,7 @@ export default function SignOutButton() {
       onClick={() => signOut({ callbackUrl: '/login' })}
       type="button"
     >
-      <LogOut size={16} /> Sign Out
+      <LogOut size={16} /> 로그아웃
     </button>
   );
 }

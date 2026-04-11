@@ -41,7 +41,7 @@ setInterval(() => {
 // ---------------------------------------------------------------------------
 
 const loginSchema = z.object({
-  email: z.string().email('유효한 이메일을 입력하세요.'),
+  username: z.string().min(1, '아이디를 입력하세요.'),
   password: z.string().min(1, '비밀번호를 입력하세요.'),
 });
 
@@ -105,13 +105,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password } = parsed.data;
+    const { username, password } = parsed.data;
 
     // 3. Find admin
-    const admin = await prisma.adminUser.findUnique({ where: { email } });
+    const admin = await prisma.adminUser.findUnique({ where: { username } });
     if (!admin) {
       return NextResponse.json(
-        { error: '이메일 또는 비밀번호가 올바르지 않습니다.' },
+        { error: '아이디 또는 비밀번호가 올바르지 않습니다.' },
         { status: 401 },
       );
     }
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     // 5. IP whitelist
     if (currentAdmin.allowedIps.length > 0 && !currentAdmin.allowedIps.includes(ip)) {
-      await logAudit(currentAdmin.id, currentAdmin.email, 'LOGIN_FAILURE', 'FAILURE', ip, ua, {
+      await logAudit(currentAdmin.id, currentAdmin.username, 'LOGIN_FAILURE', 'FAILURE', ip, ua, {
         reason: 'IP_NOT_ALLOWED',
       });
       return NextResponse.json(
@@ -178,12 +178,12 @@ export async function POST(request: NextRequest) {
         data: updateData,
       });
 
-      await logAudit(currentAdmin.id, currentAdmin.email, 'LOGIN_FAILURE', 'FAILURE', ip, ua, {
+      await logAudit(currentAdmin.id, currentAdmin.username, 'LOGIN_FAILURE', 'FAILURE', ip, ua, {
         failedCount: newFailedCount,
       });
 
       return NextResponse.json(
-        { error: '이메일 또는 비밀번호가 올바르지 않습니다.' },
+        { error: '아이디 또는 비밀번호가 올바르지 않습니다.' },
         { status: 401 },
       );
     }
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
       // Create a temporary session (mfaVerified = false)
       const { token, expiresAt } = await createSession(currentAdmin.id, request);
 
-      await logAudit(currentAdmin.id, currentAdmin.email, 'LOGIN_SUCCESS', 'SUCCESS', ip, ua, {
+      await logAudit(currentAdmin.id, currentAdmin.username, 'LOGIN_SUCCESS', 'SUCCESS', ip, ua, {
         mfaPending: true,
       });
 
@@ -223,13 +223,13 @@ export async function POST(request: NextRequest) {
       data: { mfaVerified: true },
     });
 
-    await logAudit(currentAdmin.id, currentAdmin.email, 'LOGIN_SUCCESS', 'SUCCESS', ip, ua);
+    await logAudit(currentAdmin.id, currentAdmin.username, 'LOGIN_SUCCESS', 'SUCCESS', ip, ua);
 
     const response = NextResponse.json({
       success: true,
       admin: {
         id: currentAdmin.id,
-        email: currentAdmin.email,
+        username: currentAdmin.username,
         name: currentAdmin.name,
         role: currentAdmin.role,
       },

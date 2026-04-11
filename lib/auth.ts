@@ -8,16 +8,16 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email", placeholder: "admin@sovereign.com" },
-        password: { label: "Password", type: "password" }
+        username: { label: "아이디", type: "text", placeholder: "아이디를 입력하세요" },
+        password: { label: "비밀번호", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) {
+        if (!credentials?.username || !credentials.password) {
           return null;
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
+          where: { username: credentials.username }
         });
 
         if (!user) {
@@ -32,8 +32,8 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: user.id,
-          email: user.email,
-          name: user.name,
+          email: user.username,
+          name: user.name || user.username,
         };
       }
     })

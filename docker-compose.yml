@@ -1,0 +1,47 @@
+services:
+  # 유저 앱 (포트 3300)
+  sovereign-sms-user:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sovereign-sms-user
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3300:3000"
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sovereign-sms-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 관리자 앱 (포트 3301)
+  sovereign-sms-admin:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    container_name: sovereign-sms-admin
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3301:3001"
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sovereign-sms-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  sovereign-sms-net:
+    name: sovereign-sms-net
+    driver: bridge

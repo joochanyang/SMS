@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
           data: {
             adminId: admin.id,
-            adminEmail: admin.email,
+            adminEmail: admin.username,
             action: 'LOGOUT',
             targetType: 'AdminUser',
             targetId: admin.id,

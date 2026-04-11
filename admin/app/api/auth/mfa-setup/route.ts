@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const secret = new OTPAuth.Secret({ size: 20 });
     const totp = new OTPAuth.TOTP({
       issuer: 'SovereignSMS Admin',
-      label: admin.email,
+      label: admin.username,
       algorithm: 'SHA1',
       digits: 6,
       period: 30,
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     // Verify TOTP code
     const totp = new OTPAuth.TOTP({
       issuer: 'SovereignSMS Admin',
-      label: admin.email,
+      label: admin.username,
       algorithm: 'SHA1',
       digits: 6,
       period: 30,
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       await prisma.auditLog.create({
         data: {
           adminId: admin.id,
-          adminEmail: admin.email,
+          adminEmail: admin.username,
           action: 'MFA_ENABLED',
           targetType: 'AdminUser',
           targetId: admin.id,

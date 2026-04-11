@@ -103,7 +103,7 @@ export async function logAdminAction(
 ): Promise<void> {
   await logAudit({
     adminId: admin.id,
-    adminEmail: admin.email,
+    adminEmail: admin.username,
     action,
     targetType,
     targetId,

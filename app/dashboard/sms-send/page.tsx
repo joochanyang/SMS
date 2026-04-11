@@ -1,13 +1,46 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
-import { Send, Upload, Info, Smartphone, Users } from 'lucide-react';
+import Link from 'next/link';
+import { Send, Upload, Info, Smartphone, Users, AlertTriangle, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, X as XIcon } from 'lucide-react';
 
 const COST_PER_MESSAGE_USD = 0.05;
 const DEFAULT_BATCH_SIZE = 200;
 
-type MessageType = 'TRANSACTIONAL' | 'AD';
+// GSM-7 basic character set for client-side detection
+const GSM7_CHARS = new Set(
+  '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+  'ÄÖÑÜabcdefghijklmnopqrstuvwxyzäöñüà§ÆæßÉ{|}~[\\]^€'
+);
+
+function isGsm7(text: string): boolean {
+  for (const ch of text) {
+    if (!GSM7_CHARS.has(ch)) return false;
+  }
+  return true;
+}
+
+function getSmsInfo(text: string) {
+  const gsm7 = isGsm7(text);
+  const charCount = text.length;
+  const singleMax = gsm7 ? 160 : 70;
+  const concatMax = gsm7 ? 153 : 67;
+  const parts = charCount <= singleMax ? (charCount > 0 ? 1 : 0) : Math.ceil(charCount / concatMax);
+  return {
+    encoding: gsm7 ? 'GSM-7' : 'UCS-2' as const,
+    charCount,
+    maxChars: singleMax,
+    parts,
+  };
+}
+
+function isValidPhone(raw: string): boolean {
+  const cleaned = raw.replace(/[\s\-().]/g, '');
+  if (/^\+\d{7,15}$/.test(cleaned)) return true;
+  if (/^\d{7,15}$/.test(cleaned)) return true;
+  return false;
+}
 
 type CampaignProgress = {
   id: string;
@@ -22,7 +55,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function SmsSendPage() {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
-  const [messageType, setMessageType] = useState<MessageType>('TRANSACTIONAL');
   const [message, setMessage] = useState('');
   const [recipients, setRecipients] = useState('');
   const [campaignName, setCampaignName] = useState('');
@@ -31,6 +63,14 @@ export default function SmsSendPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [progress, setProgress] = useState<CampaignProgress | null>(null);
+  const [completedCampaign, setCompletedCampaign] = useState<CampaignProgress | null>(null);
+  const [showInvalidNumbers, setShowInvalidNumbers] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const activeCampaignIdRef = useRef<string | null>(null);
+  const cancelledRef = useRef(false);
+
+  const smsInfo = useMemo(() => getSmsInfo(message), [message]);
 
   const parsedRecipients = useMemo(() => {
     if (!recipients.trim()) return [];
@@ -44,7 +84,11 @@ export default function SmsSendPage() {
     );
   }, [recipients]);
 
-  const estimatedTotalCost = parsedRecipients.length * COST_PER_MESSAGE_USD;
+  const validRecipients = useMemo(() => parsedRecipients.filter(isValidPhone), [parsedRecipients]);
+  const invalidRecipients = useMemo(() => parsedRecipients.filter((r) => !isValidPhone(r)), [parsedRecipients]);
+
+  const estimatedTotalCost = validRecipients.length * COST_PER_MESSAGE_USD;
+  const isOverLimit = smsInfo.charCount > smsInfo.maxChars;
 
   const parseCsvFile = (file: File) => {
     setStatusError(null);
@@ -63,14 +107,35 @@ export default function SmsSendPage() {
         }
         setRecipients(values.join('\n'));
         setCsvFilename(file.name);
-        setStatusMessage(`CSV 파싱 완료: ${values.length}개 원본 항목을 불러왔습니다.`);
+        setStatusMessage(`CSV 파싱 완료: ${values.length}개 항목 로드됨`);
       },
-      error: () => setStatusError('CSV 파싱에 실패했습니다. 파일 형식을 확인하세요.'),
+      error: () => setStatusError('CSV 파싱 실패. 파일 형식을 확인하세요.'),
     });
+  };
+
+  const handleCancelCampaign = async () => {
+    const cid = activeCampaignIdRef.current;
+    if (!cid) return;
+    cancelledRef.current = true;
+    try {
+      await fetch(`/api/sms/campaign/${cid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      });
+    } catch {
+      // 취소 요청 실패 시에도 클라이언트 루프는 중단
+    }
   };
 
   const processCampaignLoop = async (campaignId: string) => {
     for (let i = 0; i < 1000; i++) {
+      if (cancelledRef.current) {
+        // 취소 상태 조회 후 반환
+        const detailRes = await fetch(`/api/sms/campaign/${campaignId}`);
+        const detailData = await detailRes.json();
+        return detailData.campaign;
+      }
       const processRes = await fetch(`/api/sms/campaign/${campaignId}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,19 +173,29 @@ export default function SmsSendPage() {
     throw new Error('자동 처리 루프가 제한을 초과했습니다.');
   };
 
-  const handleSend = async () => {
+  const handleSendClick = () => {
     setStatusMessage(null);
     setStatusError(null);
-    setProgress(null);
 
     if (!message.trim()) {
       setStatusError('메시지 내용을 입력하세요.');
       return;
     }
-    if (parsedRecipients.length === 0) {
-      setStatusError('최소 1개 이상의 수신 번호를 입력하세요.');
+    if (validRecipients.length === 0) {
+      setStatusError('유효한 수신 번호가 없습니다. 번호를 확인하세요.');
       return;
     }
+    setShowConfirmModal(true);
+  };
+
+  const handleSend = async () => {
+    setShowConfirmModal(false);
+    setStatusMessage(null);
+    setStatusError(null);
+    setProgress(null);
+    setCompletedCampaign(null);
+    cancelledRef.current = false;
+    activeCampaignIdRef.current = null;
 
     try {
       setIsSending(true);
@@ -129,8 +204,7 @@ export default function SmsSendPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: campaignName || undefined,
-          messageType,
-          recipients: parsedRecipients,
+          recipients: validRecipients,
           message,
         }),
       });
@@ -141,14 +215,23 @@ export default function SmsSendPage() {
       }
 
       const campaignId = createData.campaignId as string;
-      setStatusMessage(`캠페인 생성 완료. 자동 배치 발송을 시작합니다. (ID: ${campaignId})`);
+      activeCampaignIdRef.current = campaignId;
+      setStatusMessage(`캠페인 생성 완료. 자동 발송을 시작합니다. (ID: ${campaignId})`);
       const finalCampaign = await processCampaignLoop(campaignId);
 
-      setStatusMessage(
-        `캠페인 처리 완료: 상태=${finalCampaign.status}, 처리=${finalCampaign.processedCount}/${finalCampaign.totalRecipients}, 실패=${finalCampaign.failedCount}`
-      );
+      const completed: CampaignProgress = {
+        id: finalCampaign.id,
+        status: finalCampaign.status,
+        processedCount: finalCampaign.processedCount,
+        totalRecipients: finalCampaign.totalRecipients,
+        failedCount: finalCampaign.failedCount,
+        deliveredCount: finalCampaign.deliveredCount,
+      };
+      setCompletedCampaign(completed);
+      setProgress(null);
+      setStatusMessage(null);
       if (finalCampaign.failedCount > 0) {
-        setStatusError('일부 건은 실패/재시도 초과되었습니다. 히스토리에서 상세 상태를 확인하세요.');
+        setStatusError('일부 건이 실패했습니다. 히스토리에서 상세 내역을 확인하세요.');
       }
     } catch (e: unknown) {
       setStatusError(e instanceof Error ? e.message : '서버 통신 중 오류가 발생했습니다.');
@@ -163,70 +246,255 @@ export default function SmsSendPage() {
         <div className="glass-card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
             <button onClick={() => setActiveTab('single')} style={{ padding: '0.5rem 1rem', color: activeTab === 'single' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, borderBottom: activeTab === 'single' ? '2px solid var(--primary)' : 'none' }}>
-              Single Dispatch
+              개별 발송
             </button>
             <button onClick={() => setActiveTab('bulk')} style={{ padding: '0.5rem 1rem', color: activeTab === 'bulk' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, borderBottom: activeTab === 'bulk' ? '2px solid var(--primary)' : 'none' }}>
-              Bulk Marketing (CSV)
+              대량 발송 (CSV)
             </button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Campaign Name (optional)</label>
-                <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="예: 4월 한국 캠페인" style={{ width: '100%', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text-main)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Message Type</label>
-                <select value={messageType} onChange={(e) => setMessageType(e.target.value as MessageType)} style={{ width: '100%', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text-main)', outline: 'none' }}>
-                  <option value="TRANSACTIONAL">TRANSACTIONAL (일반/알림)</option>
-                  <option value="AD">AD (광고성)</option>
-                </select>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>캠페인 이름 (선택)</label>
+              <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="예: 4월 프로모션" disabled={isSending} style={{ width: '100%', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text-main)', outline: 'none', opacity: isSending ? 0.6 : 1 }} />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                 {activeTab === 'single' ? <Smartphone size={16} /> : <Users size={16} />}
-                {activeTab === 'single' ? 'Recipient Numbers' : 'CSV Campaign Data'}
+                {activeTab === 'single' ? '수신 번호' : 'CSV 대량 발송'}
               </label>
 
               {activeTab === 'single' ? (
-                <textarea placeholder="Enter numbers (e.g., 01012345678), separated by comma or new line" value={recipients} onChange={(e) => setRecipients(e.target.value)} style={{ width: '100%', minHeight: '120px', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', color: 'var(--text-main)', outline: 'none', resize: 'vertical' }} />
+                <textarea placeholder="번호를 입력하세요 (예: +821012345678), 쉼표 또는 줄바꿈으로 구분" value={recipients} onChange={(e) => setRecipients(e.target.value)} disabled={isSending} style={{ width: '100%', minHeight: '120px', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', color: 'var(--text-main)', outline: 'none', resize: 'vertical', opacity: isSending ? 0.6 : 1 }} />
               ) : (
-                <label style={{ border: '2px dashed var(--border)', borderRadius: '12px', padding: '2rem', textAlign: 'center', backgroundColor: 'rgba(2, 6, 23, 0.3)', cursor: 'pointer', display: 'block' }}>
-                  <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files?.[0]; if (file) parseCsvFile(file); }} />
-                  <Upload size={32} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-                  <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>CSV 파일 선택</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{csvFilename ? `선택됨: ${csvFilename}` : '전화번호 컬럼이 있는 CSV 업로드'}</div>
+                <label
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!isSending) setIsDragOver(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+                    if (isSending) return;
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && (file.name.endsWith('.csv') || file.type === 'text/csv')) parseCsvFile(file);
+                    else setStatusError('CSV 파일만 업로드할 수 있습니다.');
+                  }}
+                  style={{
+                    border: `2px dashed ${isDragOver ? 'var(--primary)' : 'var(--border)'}`,
+                    borderRadius: '12px', padding: '2rem', textAlign: 'center',
+                    backgroundColor: isDragOver ? 'rgba(59,130,246,0.08)' : 'rgba(2, 6, 23, 0.3)',
+                    cursor: isSending ? 'not-allowed' : 'pointer', display: 'block',
+                    opacity: isSending ? 0.6 : 1, transition: 'border-color 0.2s, background-color 0.2s',
+                  }}
+                >
+                  <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} disabled={isSending} onChange={(e) => { const file = e.target.files?.[0]; if (file) parseCsvFile(file); }} />
+                  <Upload size={32} color={isDragOver ? 'var(--primary)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
+                  <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{isDragOver ? '여기에 놓으세요' : 'CSV 파일 선택 또는 드래그앤드롭'}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{csvFilename ? `선택됨: ${csvFilename}` : '전화번호가 포함된 CSV 파일 업로드'}</div>
                 </label>
+              )}
+              {parsedRecipients.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'rgba(16,185,129,0.1)', color: '#6ee7b7' }}>
+                      유효: {validRecipients.length}개
+                    </span>
+                    {invalidRecipients.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInvalidNumbers((v) => !v)}
+                        style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'rgba(239,68,68,0.1)', color: '#fca5a5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', border: 'none' }}
+                      >
+                        무효: {invalidRecipients.length}개
+                        {showInvalidNumbers ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      </button>
+                    )}
+                    <span style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'rgba(59,130,246,0.1)', color: '#93c5fd' }}>
+                      총: {parsedRecipients.length}개
+                    </span>
+                  </div>
+                  {showInvalidNumbers && invalidRecipients.length > 0 && (
+                    <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', fontSize: '0.75rem', color: '#fca5a5', maxHeight: '120px', overflowY: 'auto' }}>
+                      <div style={{ marginBottom: '0.5rem', fontWeight: 600 }}>유효하지 않은 번호 목록:</div>
+                      {invalidRecipients.map((num, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.15rem 0' }}>
+                          <XCircle size={11} /> {num}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Message Content</label>
-                <span style={{ fontSize: '0.75rem', color: message.length > 90 ? '#f59e0b' : 'var(--primary)' }}>
-                  {message.length} / {message.length > 90 ? '2000 (LMS)' : '90 (SMS)'} bytes
-                </span>
+                <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>메시지 내용</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)', backgroundColor: 'rgba(255,255,255,0.05)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                    {smsInfo.encoding}
+                  </span>
+                  <span style={{ color: isOverLimit ? '#ef4444' : 'var(--primary)', fontWeight: 600 }}>
+                    {smsInfo.charCount} / {smsInfo.maxChars}
+                  </span>
+                  {isOverLimit && (
+                    <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <AlertTriangle size={12} />
+                      초과
+                    </span>
+                  )}
+                </div>
               </div>
-              <textarea placeholder="Type your message here..." value={message} onChange={(e) => setMessage(e.target.value)} style={{ width: '100%', minHeight: '180px', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', color: 'var(--text-main)', outline: 'none', resize: 'vertical' }} />
+              <textarea placeholder="메시지를 입력하세요..." value={message} onChange={(e) => setMessage(e.target.value)} disabled={isSending} style={{ width: '100%', minHeight: '180px', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${isOverLimit ? '#f59e0b' : 'var(--border)'}`, borderRadius: '8px', padding: '1rem', color: 'var(--text-main)', outline: 'none', resize: 'vertical', opacity: isSending ? 0.6 : 1 }} />
+              {isOverLimit && (
+                <div style={{ fontSize: '0.75rem', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={14} />
+                  {smsInfo.encoding} 기준 최대 {smsInfo.maxChars}자입니다. 메시지를 줄여주세요.
+                </div>
+              )}
             </div>
 
             {statusError && <div style={{ marginTop: '0.5rem', padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.08)', color: '#fca5a5', fontSize: '0.8rem' }}>{statusError}</div>}
             {statusMessage && <div style={{ marginTop: '0.5rem', padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(16,185,129,0.08)', color: '#6ee7b7', fontSize: '0.8rem' }}>{statusMessage}</div>}
-            {progress && (
-              <div style={{ marginTop: '0.5rem', padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(59,130,246,0.08)', color: '#93c5fd', fontSize: '0.8rem' }}>
-                진행 상태: {progress.status} / {progress.processedCount} / {progress.totalRecipients} · 실패 {progress.failedCount} · 전달완료 {progress.deliveredCount}
+
+            {/* 발송 진행률 프로그레스 바 */}
+            {progress && (() => {
+              const percent = progress.totalRecipients > 0 ? Math.round((progress.processedCount / progress.totalRecipients) * 100) : 0;
+              const statusColor = progress.status === 'COMPLETED' ? '#10b981' : progress.status === 'FAILED' ? '#ef4444' : 'var(--primary)';
+              const statusLabel = progress.status === 'COMPLETED' ? '완료' : progress.status === 'FAILED' ? '실패' : progress.status === 'CANCELLED' ? '취소됨' : '발송 중';
+              return (
+                <div style={{ marginTop: '0.5rem', padding: '1rem', borderRadius: '8px', backgroundColor: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+                    <span style={{ fontSize: '0.8rem', color: '#93c5fd', fontWeight: 600 }}>{percent}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(59,130,246,0.15)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${percent}%`, height: '100%', backgroundColor: statusColor, borderRadius: '4px', transition: 'width 0.3s ease' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', fontSize: '0.75rem' }}>
+                    <span style={{ color: '#93c5fd' }}>처리: <strong>{progress.processedCount}/{progress.totalRecipients}</strong></span>
+                    <span style={{ color: '#6ee7b7' }}>성공: <strong>{progress.deliveredCount}</strong></span>
+                    <span style={{ color: '#fca5a5' }}>실패: <strong>{progress.failedCount}</strong></span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 발송 완료 요약 카드 */}
+            {completedCampaign && (
+              <div style={{ marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px', backgroundColor: completedCampaign.status === 'COMPLETED' ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${completedCampaign.status === 'COMPLETED' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', fontWeight: 700, fontSize: '0.95rem', color: completedCampaign.status === 'COMPLETED' ? '#6ee7b7' : '#fca5a5' }}>
+                  {completedCampaign.status === 'COMPLETED' ? <CheckCircle size={18} /> : <XCircle size={18} />}
+                  캠페인 {completedCampaign.status === 'COMPLETED' ? '발송 완료' : '발송 실패'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ textAlign: 'center', padding: '0.75rem', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>{completedCampaign.totalRecipients}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>총 발송</div>
+                  </div>
+                  <div style={{ textAlign: 'center', padding: '0.75rem', borderRadius: '8px', backgroundColor: 'rgba(16,185,129,0.05)' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#6ee7b7' }}>{completedCampaign.deliveredCount}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>성공</div>
+                  </div>
+                  <div style={{ textAlign: 'center', padding: '0.75rem', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.05)' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fca5a5' }}>{completedCampaign.failedCount}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>실패</div>
+                  </div>
+                </div>
+                <Link href="/dashboard/history" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  히스토리 보기 &rarr;
+                </Link>
               </div>
             )}
 
-            <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1.25rem', marginTop: '0.75rem', opacity: isSending ? 0.7 : 1 }} disabled={isSending} onClick={handleSend}>
-              <Send size={18} /> {isSending ? 'Dispatching...' : 'Dispatch Campaign'}
-            </button>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <button className="btn-primary" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1.25rem', opacity: (isSending || isOverLimit) ? 0.7 : 1, cursor: (isSending || isOverLimit) ? 'not-allowed' : 'pointer' }} disabled={isSending || isOverLimit} onClick={handleSendClick}>
+                {isSending ? (
+                  <>
+                    <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                    발송 중...
+                  </>
+                ) : (
+                  <>
+                    <Send size={18} /> 캠페인 발송
+                  </>
+                )}
+              </button>
+              {isSending && (
+                <button
+                  type="button"
+                  onClick={handleCancelCampaign}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                    padding: '1.25rem 1.5rem', borderRadius: '8px', fontWeight: 600, fontSize: '0.875rem',
+                    backgroundColor: 'rgba(239,68,68,0.12)', color: '#fca5a5',
+                    border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.2)')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.12)')}
+                >
+                  <XIcon size={18} /> 취소
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 발송 확인 모달 */}
+      {showConfirmModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setShowConfirmModal(false)}
+        >
+          <div
+            className="glass-card"
+            style={{ padding: '2rem', maxWidth: '420px', width: '90%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-main)' }}>
+              <AlertTriangle size={20} color="#f59e0b" /> 발송 확인
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+              <strong style={{ color: 'var(--text-main)' }}>{validRecipients.length}명</strong>에게
+              <strong style={{ color: 'var(--primary)' }}> ${estimatedTotalCost.toFixed(2)}</strong> 비용으로
+              SMS를 발송합니다.
+              {invalidRecipients.length > 0 && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#fca5a5' }}>
+                  (유효하지 않은 번호 {invalidRecipients.length}개는 제외됩니다)
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  flex: 1, padding: '0.75rem', borderRadius: '8px', fontWeight: 600, fontSize: '0.875rem',
+                  backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)', cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={handleSend}
+                style={{ flex: 1, padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer' }}
+              >
+                <Send size={16} /> 발송하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div style={{ position: 'relative' }}>
@@ -236,7 +504,7 @@ export default function SmsSendPage() {
             </div>
             <div style={{ padding: '1.5rem' }}>
               <div style={{ backgroundColor: '#1e293b', padding: '1rem', borderRadius: '12px 12px 12px 2px', fontSize: '0.875rem', color: '#fff', wordBreak: 'break-all', minHeight: '40px' }}>
-                {message || 'Preview will appear here...'}
+                {message || '미리보기가 여기에 표시됩니다...'}
               </div>
             </div>
           </div>
@@ -244,26 +512,31 @@ export default function SmsSendPage() {
 
         <div className="glass-card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: 'var(--primary)', fontWeight: 600 }}>
-            <Info size={16} /> Cost Estimation
+            <Info size={16} /> 비용 예상
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Estimated Recipients</span>
-              <span>{parsedRecipients.length}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>수신자 수</span>
+              <span>{validRecipients.length}명</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Cost per Message</span>
+              <span style={{ color: 'var(--text-secondary)' }}>인코딩</span>
+              <span>{smsInfo.encoding} (최대 {smsInfo.maxChars}자)</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>건당 비용</span>
               <span>${COST_PER_MESSAGE_USD.toFixed(2)}</span>
             </div>
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 700 }}>
-              <span style={{ color: 'var(--primary)' }}>Total Estimated</span>
+              <span style={{ color: 'var(--primary)' }}>예상 총 비용</span>
               <span>${estimatedTotalCost.toFixed(2)}</span>
             </div>
           </div>
           <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            - 한국 번호는 자동으로 +82 형식으로 정규화됩니다.<br />
-            - 광고성(AD) 선택 시 메시지에 `(광고)`와 `무료 수신거부` 문구가 필요합니다.
+            - 영문만: 160자 = 1건 (GSM-7)<br />
+            - 한글/이모지 포함: 70자 = 1건 (UCS-2)<br />
+            - 글자수 초과 시 발송이 차단됩니다
           </div>
         </div>
       </div>

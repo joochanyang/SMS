@@ -31,7 +31,7 @@ export default function MfaSetupPage() {
           router.push('/login');
           return;
         }
-        setError(data.error || 'MFA 설정을 불러올 수 없습니다.');
+        setError(data.error || '2단계 인증 설정을 불러올 수 없습니다.');
         setStep('scan');
         return;
       }
@@ -81,7 +81,7 @@ export default function MfaSetupPage() {
 
   function downloadBackupCodes() {
     const content = [
-      'SovereignSMS Admin - MFA 백업 코드',
+      'SovereignSMS Admin - 2단계 인증 백업 코드',
       '=' .repeat(40),
       '',
       '아래 코드를 안전한 곳에 보관하세요.',
@@ -129,7 +129,7 @@ export default function MfaSetupPage() {
 
         {step === 'scan' && (
           <>
-            <h2 className="auth-title">MFA 설정</h2>
+            <h2 className="auth-title">2단계 인증 설정</h2>
             <p className="auth-subtitle">인증 앱으로 QR 코드를 스캔하세요</p>
 
             {error && (
@@ -141,7 +141,7 @@ export default function MfaSetupPage() {
 
             {qrDataUrl && (
               <div className="mfa-qr-wrapper">
-                <img src={qrDataUrl} alt="MFA QR Code" width={200} height={200} />
+                <img src={qrDataUrl} alt="2단계 인증 QR 코드" width={200} height={200} />
               </div>
             )}
 
@@ -247,7 +247,7 @@ export default function MfaSetupPage() {
                 size={48}
                 style={{ color: 'var(--status-success)', marginBottom: '12px' }}
               />
-              <h2 className="auth-title">MFA 활성화 완료</h2>
+              <h2 className="auth-title">2단계 인증 활성화 완료</h2>
             </div>
 
             <div className="auth-warning" style={{ marginBottom: '20px' }}>

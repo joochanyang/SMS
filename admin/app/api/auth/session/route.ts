@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       authenticated: true,
       admin: {
         id: admin.id,
-        email: admin.email,
+        username: admin.username,
         name: admin.name,
         role: admin.role,
         mfaEnabled: admin.mfaEnabled,

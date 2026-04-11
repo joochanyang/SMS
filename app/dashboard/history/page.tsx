@@ -29,6 +29,7 @@ export default async function HistoryPage() {
       status: true,
       cost: true,
       providerStatus: true,
+      networkName: true,
       retryCount: true,
       createdAt: true,
     },
@@ -37,7 +38,7 @@ export default async function HistoryPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Dispatch History</h2>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>발송 내역</h2>
         <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>최근 200건 표시</span>
       </div>
 
@@ -45,13 +46,13 @@ export default async function HistoryPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Recipient</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Message Snippet</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Status</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Provider</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Retry</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>Time</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600, textAlign: 'right' }}>Cost</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>수신번호</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>메시지</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>상태</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>통신사/네트워크</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>재시도</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600 }}>발송시간</th>
+              <th style={{ padding: '1.25rem', fontWeight: 600, textAlign: 'right' }}>비용</th>
             </tr>
           </thead>
           <tbody>
@@ -81,7 +82,7 @@ export default async function HistoryPage() {
                     {log.status}
                   </div>
                 </td>
-                <td style={{ padding: '1.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.providerStatus || '-'}</td>
+                <td style={{ padding: '1.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.networkName || log.providerStatus || '-'}</td>
                 <td style={{ padding: '1.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.retryCount}</td>
                 <td style={{ padding: '1.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{formatDateTime(log.createdAt)}</td>
                 <td style={{ padding: '1.25rem', fontSize: '0.875rem', fontWeight: 600, textAlign: 'right' }}>${log.cost.toFixed(2)}</td>

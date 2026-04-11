@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, MessageSquare, StopCircle } from 'lucide-react';
+import { ArrowLeft, MessageSquare, StopCircle, Download } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
@@ -34,6 +34,7 @@ interface LogEntry {
   cost: number;
   providerStatus: string | null;
   providerError: string | null;
+  networkName: string | null;
   retryCount: number;
   createdAt: string;
 }
@@ -108,6 +109,10 @@ export default function CampaignDetailPage() {
     }
   }
 
+  function handleExportCsv() {
+    window.open(`/api/campaigns/${campaignId}/export`, '_blank');
+  }
+
   const logColumns: Column<LogEntry>[] = [
     { key: 'targetNumber', label: '전화번호', render: (row) => <span style={{ fontFamily: 'monospace' }}>{row.targetNumber}</span> },
     {
@@ -118,6 +123,7 @@ export default function CampaignDetailPage() {
         </span>
       ),
     },
+    { key: 'networkName', label: '통신사', render: (row) => row.networkName ?? '-' },
     { key: 'cost', label: '비용', render: (row) => `\u20A9${row.cost.toLocaleString('ko-KR')}` },
     { key: 'retryCount', label: '재시도' },
     { key: 'providerError', label: '오류', render: (row) => row.providerError ?? '-' },
@@ -211,8 +217,11 @@ export default function CampaignDetailPage() {
 
               {/* Message logs */}
               <div className="data-table-wrapper">
-                <div className="data-table-header">
+                <div className="data-table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 className="data-table-title">발송 로그 (최근 100건)</h3>
+                  <button className="btn btn-outline" onClick={handleExportCsv} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Download size={14} /> 엑셀 다운로드
+                  </button>
                 </div>
                 <DataTable
                   columns={logColumns}

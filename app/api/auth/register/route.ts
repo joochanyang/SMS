@@ -10,38 +10,38 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return rl.response!;
 
     const body = await req.json();
-    const { email, password, name } = body as {
-      email?: string;
+    const { username, password, name } = body as {
+      username?: string;
       password?: string;
       name?: string;
     };
 
-    if (!email || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { error: "이메일과 비밀번호는 필수입니다." },
+        { error: "아이디와 비밀번호는 필수입니다." },
         { status: 400 },
       );
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email) || email.length > 254) {
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!usernameRegex.test(username)) {
       return NextResponse.json(
-        { error: "유효한 이메일 형식이 아닙니다." },
+        { error: "아이디는 3~30자의 영문, 숫자, 밑줄(_)만 사용할 수 있습니다." },
         { status: 400 },
       );
     }
 
-    if (password.length < 8) {
+    if (password.length < 4) {
       return NextResponse.json(
-        { error: "비밀번호는 최소 8자 이상이어야 합니다." },
+        { error: "비밀번호는 최소 4자 이상이어야 합니다." },
         { status: 400 },
       );
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { username } });
     if (existing) {
       return NextResponse.json(
-        { error: "이미 등록된 이메일입니다." },
+        { error: "이미 사용 중인 아이디입니다." },
         { status: 409 },
       );
     }
@@ -50,13 +50,13 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.create({
       data: {
-        email,
+        username,
         passwordHash,
         name: name?.trim().slice(0, 100) || null,
       },
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         createdAt: true,
       },

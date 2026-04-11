@@ -13,7 +13,7 @@ export default function Header({ title, killSwitchActive = false, adminName }: H
       <div className="admin-header-right">
         <div className={`header-kill-badge ${killSwitchActive ? 'active' : 'inactive'}`}>
           <Power size={14} />
-          {killSwitchActive ? 'Kill Switch 활성' : '정상 운영'}
+          {killSwitchActive ? '긴급 중지 활성' : '정상 운영'}
         </div>
         {adminName && <span className="header-admin-name">{adminName}</span>}
       </div>

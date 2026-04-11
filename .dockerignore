@@ -1,0 +1,9 @@
+node_modules
+admin/node_modules
+.next
+admin/.next
+.git
+__tests__
+*.md
+.env
+.env.local

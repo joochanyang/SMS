@@ -134,7 +134,7 @@ export async function processCampaignBatch(
           },
         });
       }
-      const refundAmount = blockedLogs.reduce((sum, l) => sum + l.cost, 0);
+      const refundAmount = blockedLogs.reduce((sum, l) => sum + Number(l.cost), 0);
       await tx.smsCampaign.update({
         where: { id: campaignId },
         data: {

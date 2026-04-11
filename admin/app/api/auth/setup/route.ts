@@ -9,8 +9,8 @@ import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
 
 const setupSchema = z.object({
   secret: z.string().min(1, '설정 시크릿이 필요합니다.'),
-  email: z.string().email('유효한 이메일을 입력하세요.'),
-  password: z.string().min(16, '비밀번호는 최소 16자 이상이어야 합니다.'),
+  username: z.string().min(1, '아이디를 입력하세요.'),
+  password: z.string().min(4, '비밀번호는 최소 4자 이상이어야 합니다.'),
   name: z.string().min(1, '이름을 입력하세요.'),
 });
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { secret, email, password, name } = parsed.data;
+    const { secret, username, password, name } = parsed.data;
 
     // 3. Verify setup secret
     if (secret !== setupSecret) {
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     // 7. Create SUPER_ADMIN
     const admin = await prisma.adminUser.create({
       data: {
-        email,
+        username,
         passwordHash,
         name,
         role: 'SUPER_ADMIN',
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       message: 'SUPER_ADMIN 계정이 생성되었습니다. MFA를 설정하세요.',
       admin: {
         id: admin.id,
-        email: admin.email,
+        username: admin.username,
         name: admin.name,
         role: admin.role,
       },

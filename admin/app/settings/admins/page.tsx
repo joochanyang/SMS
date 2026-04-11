@@ -154,7 +154,7 @@ export default function AdminUsersPage() {
       key: 'status', label: '상태',
       render: (row) => <span className={`badge ${row.status === 'ACTIVE' ? 'badge-active' : 'badge-suspended'}`}>{statusLabels[row.status] ?? row.status}</span>,
     },
-    { key: 'mfaEnabled', label: 'MFA', render: (row) => row.mfaEnabled ? 'ON' : 'OFF' },
+    { key: 'mfaEnabled', label: '2단계 인증', render: (row) => row.mfaEnabled ? '사용' : '미사용' },
     { key: 'lastLoginAt', label: '마지막 로그인', render: (row) => row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleString('ko-KR') : '-' },
     {
       key: 'actions', label: '', width: '100px',

@@ -94,13 +94,13 @@ export async function POST(request: NextRequest) {
       where: { key: 'kill_switch' },
       create: {
         key: 'kill_switch',
-        value: { level, reason, activatedAt: new Date().toISOString(), activatedBy: admin.email },
+        value: { level, reason, activatedAt: new Date().toISOString(), activatedBy: admin.username },
         category: 'system',
         description: '킬 스위치 상태',
         updatedById: admin.id,
       },
       update: {
-        value: { level, reason, activatedAt: new Date().toISOString(), activatedBy: admin.email },
+        value: { level, reason, activatedAt: new Date().toISOString(), activatedBy: admin.username },
         updatedById: admin.id,
       },
     });
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
             data: { status: 'CANCELLED' as any },
           });
 
-          const refundAmount = cancelResult.count * campaign.costPerMessage;
+          const refundAmount = cancelResult.count * Number(campaign.costPerMessage);
 
           if (refundAmount > 0) {
             const user = await tx.user.findUnique({
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (user) {
-              const newBalance = user.credits + refundAmount;
+              const newBalance = Number(user.credits) + refundAmount;
 
               await tx.user.update({
                 where: { id: campaign.userId },
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     // Alert
     await sendAlert(
-      `킬 스위치 변경: ${level} (사유: ${reason}). 관리자: ${admin.email}${stoppedCampaigns > 0 ? `. 중지된 캠페인: ${stoppedCampaigns}건` : ''}`,
+      `킬 스위치 변경: ${level} (사유: ${reason}). 관리자: ${admin.username}${stoppedCampaigns > 0 ? `. 중지된 캠페인: ${stoppedCampaigns}건` : ''}`,
       'CRITICAL',
     );
 

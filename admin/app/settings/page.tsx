@@ -127,7 +127,7 @@ export default function SettingsPage() {
           <div className="card" style={{ marginBottom: '24px', borderColor: killSwitch ? 'var(--status-danger)' : undefined }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: killSwitch ? 'var(--status-danger)' : undefined }}>
-                <AlertTriangle size={18} /> 긴급 중지 스위치 (Kill Switch)
+                <AlertTriangle size={18} /> 긴급 중지 스위치
               </h3>
               <button
                 className={`btn ${killSwitch ? 'btn-primary' : 'btn-danger'} btn-sm`}

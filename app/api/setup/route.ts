@@ -23,30 +23,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@sovereign.com';
+    const adminUsername = 'admin';
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: adminEmail }
+      where: { username: adminUsername }
     });
 
     if (existingUser) {
-      return NextResponse.json({ message: 'Admin user already exists.' }, { status: 200 });
+      return NextResponse.json({ message: '관리자 계정이 이미 존재합니다.' }, { status: 200 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
     await prisma.user.create({
       data: {
-        email: adminEmail,
+        username: adminUsername,
         passwordHash: hashedPassword,
-        name: 'Sovereign Admin',
+        name: '관리자',
         credits: 1000.0
       }
     });
 
     return NextResponse.json({
-      message: 'Admin user created successfully.',
-      user: { email: adminEmail }
+      message: '관리자 계정이 생성되었습니다.',
+      user: { username: adminUsername }
     }, { status: 201 });
 
   } catch (error) {

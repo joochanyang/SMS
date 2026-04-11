@@ -95,13 +95,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     // Deduction: check sufficient balance
     const isDeduction = type === 'ADMIN_DEDUCT' || amount < 0;
-    if (isDeduction && user.credits < absAmount) {
+    const userCredits = Number(user.credits);
+    if (isDeduction && userCredits < absAmount) {
       await logAdminAction(admin, 'CREDIT_ADJUST_FAILED', 'User', id, reason, req, {
         result: 'FAILURE',
-        metadata: { amount, type, currentBalance: user.credits, error: 'INSUFFICIENT_BALANCE' },
+        metadata: { amount, type, currentBalance: userCredits, error: 'INSUFFICIENT_BALANCE' },
       });
       return NextResponse.json(
-        { error: `잔액 부족: 현재 ${user.credits.toLocaleString('ko-KR')}원, 차감 요청 ${absAmount.toLocaleString('ko-KR')}원` },
+        { error: `잔액 부족: 현재 ${userCredits.toLocaleString('ko-KR')}원, 차감 요청 ${absAmount.toLocaleString('ko-KR')}원` },
         { status: 400 },
       );
     }

@@ -122,15 +122,15 @@ export async function GET(request: NextRequest) {
         totalSent: todaySent,
         successCount: todaySuccess,
         failedCount: todayFailed,
-        totalCost: todayCost._sum.cost ?? 0,
+        totalCost: Number(todayCost._sum.cost ?? 0),
       },
       comparison: {
         sentChange: percentChange(todaySent, yesterdaySent),
         successChange: percentChange(todaySuccess, yesterdaySuccess),
         failedChange: percentChange(todayFailed, yesterdayFailed),
         costChange: percentChange(
-          todayCost._sum.cost ?? 0,
-          yesterdayCost._sum.cost ?? 0,
+          Number(todayCost._sum.cost ?? 0),
+          Number(yesterdayCost._sum.cost ?? 0),
         ),
       },
       activeCampaigns,

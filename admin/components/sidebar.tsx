@@ -81,7 +81,7 @@ export default function Sidebar({ adminName, adminEmail, adminRole, killSwitchAc
           </div>
           <h1>
             SovereignSMS
-            <span>Admin Panel</span>
+            <span>관리자 패널</span>
           </h1>
           {mobileOpen && (
             <button
@@ -116,7 +116,7 @@ export default function Sidebar({ adminName, adminEmail, adminRole, killSwitchAc
           <div className={`sidebar-kill-switch ${killSwitchActive ? 'active' : 'inactive'}`}>
             <span className={`sidebar-kill-dot ${killSwitchActive ? 'active' : 'inactive'}`} />
             <Power size={16} />
-            <span>Kill Switch: {killSwitchActive ? '활성' : '비활성'}</span>
+            <span>긴급 중지: {killSwitchActive ? '활성' : '비활성'}</span>
           </div>
 
           <div className="sidebar-admin-info">

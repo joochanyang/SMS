@@ -98,6 +98,7 @@ export async function validateSession(
 ): Promise<{
   id: string;
   email: string;
+  username: string;
   name: string;
   role: string;
   status: string;
@@ -155,7 +156,8 @@ export async function validateSession(
 
   return {
     id: session.admin.id,
-    email: session.admin.email,
+    email: session.admin.email ?? session.admin.username,
+    username: session.admin.username,
     name: session.admin.name,
     role: session.admin.role,
     status: session.admin.status,
@@ -183,6 +185,7 @@ export async function requireAuth(
 ): Promise<{
   id: string;
   email: string;
+  username: string;
   name: string;
   role: string;
   status: string;

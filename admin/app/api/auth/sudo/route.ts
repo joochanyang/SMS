@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       });
 
       await sendAlert(
-        `Sudo 활성화 실패: ${admin.email} (${admin.name})`,
+        `Sudo 활성화 실패: ${admin.username} (${admin.name})`,
         'WARNING',
       );
 

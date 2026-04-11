@@ -6,13 +6,13 @@ import { Shield, AlertCircle, Clock } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
-  email: z.string().email('유효한 이메일을 입력하세요.'),
+  username: z.string().min(1, '아이디를 입력하세요.'),
   password: z.string().min(1, '비밀번호를 입력하세요.'),
 });
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setError('');
     setWarning('');
 
-    const parsed = loginSchema.safeParse({ email, password });
+    const parsed = loginSchema.safeParse({ username, password });
     if (!parsed.success) {
       const errors = parsed.error.flatten().fieldErrors;
       setError(Object.values(errors).flat()[0] || '입력값을 확인하세요.');
@@ -37,7 +37,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await res.json();
@@ -100,13 +100,13 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">이메일</label>
+            <label className="form-label">아이디</label>
             <input
-              type="email"
+              type="text"
               className="form-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@sovereignsms.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="아이디를 입력하세요"
               autoFocus
               disabled={locked}
             />
