@@ -11,7 +11,7 @@ model User {
   email           String    @unique
   passwordHash    String
   name            String?
-  credits         Float     @default(0)
+  credits         Decimal   @default(0) @db.Decimal(12, 4)
   status          String    @default("ACTIVE")    // ACTIVE, SUSPENDED, BANNED
   suspendedAt     DateTime?
   suspendReason   String?
@@ -43,8 +43,8 @@ model SmsCampaign {
   deliveredCount  Int      @default(0)
   failedCount     Int      @default(0)
 
-  costPerMessage  Float    @default(0.05)
-  estimatedCost   Float    @default(0)
+  costPerMessage  Decimal  @default(0.05) @db.Decimal(12, 4)
+  estimatedCost   Decimal  @default(0)    @db.Decimal(12, 4)
   dynamicBatchSize Int     @default(200)
   tempFailureStreak Int    @default(0)
   cooldownUntil   DateTime?
@@ -67,10 +67,12 @@ model SmsLog {
   targetNumber  String
   messageBody   String
   status        String    @default("PENDING") // PENDING, SENT, RETRY_PENDING, DELIVERED, FAILED
-  cost          Float     @default(0)
+  cost          Decimal   @default(0) @db.Decimal(12, 4)
   messageId     String?   @unique // Infobip specific message ID
   providerStatus String?
   providerError  String?
+  networkName    String?   // 통신사명 (Infobip DLR에서 추출)
+  networkCode    String?   // MCC+MNC 코드 (예: "450 05" = SKT)
   retryCount     Int       @default(0)
   nextRetryAt    DateTime?
   createdAt     DateTime  @default(now())
@@ -85,7 +87,7 @@ model Transaction {
   id            String    @id @default(cuid())
   userId        String
   user          User      @relation(fields: [userId], references: [id])
-  amount        Float
+  amount        Decimal   @db.Decimal(12, 4)
   type          String    // DEPOSIT, WITHDRAWAL
   description   String?
   createdAt     DateTime  @default(now())
@@ -108,7 +110,7 @@ model AdminUser {
   lockedUntil         DateTime?
   passwordChangedAt   DateTime  @default(now())
   previousPasswords   String[]  @default([])
-  dailyCreditLimit    Float     @default(5000000)
+  dailyCreditLimit    Decimal   @default(5000000) @db.Decimal(12, 4)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   lastLoginAt         DateTime?
@@ -194,13 +196,28 @@ model Blacklist {
   @@index([userId])
 }
 
+model CreditCoupon {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  amount      Decimal   @db.Decimal(12, 4)
+  description String?
+  isUsed      Boolean   @default(false)
+  usedById    String?
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String?
+
+  @@index([code])
+}
+
 model CreditLedger {
   id              String    @id @default(cuid())
   userId          String
   user            User      @relation(fields: [userId], references: [id])
   type            String
-  amount          Float
-  balanceAfter    Float
+  amount          Decimal   @db.Decimal(12, 4)
+  balanceAfter    Decimal   @db.Decimal(12, 4)
   referenceType   String?
   referenceId     String?
   description     String
@@ -221,8 +238,8 @@ model RateLimitConfig {
   maxPerHour      Int?
   maxPerDay       Int?
   maxPerCampaign  Int?
-  maxCostPerDay   Float?
-  maxCostPerMonth Float?
+  maxCostPerDay   Decimal?  @db.Decimal(12, 4)
+  maxCostPerMonth Decimal?  @db.Decimal(12, 4)
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -254,7 +271,7 @@ model RefundRequest {
   id              String    @id @default(cuid())
   userId          String
   user            User      @relation(fields: [userId], references: [id])
-  amount          Float
+  amount          Decimal   @db.Decimal(12, 4)
   reason          String
   evidence        Json?
   status          String    @default("PENDING")
