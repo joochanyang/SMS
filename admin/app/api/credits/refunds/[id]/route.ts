@@ -97,7 +97,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       requirePermission(admin, 'refund:approve_l1');
 
       // Cannot approve own request
-      if (refund.l1ApprovedById === admin.id) {
+      if (refund.createdById === admin.id) {
         return NextResponse.json({ error: '본인이 생성한 요청은 승인할 수 없습니다.' }, { status: 400 });
       }
 

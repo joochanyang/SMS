@@ -95,7 +95,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         ...campaign,
         user: {
           ...campaign.user,
-          email: maskEmail(campaign.user.email),
+          email: campaign.user.email ? maskEmail(campaign.user.email) : null,
         },
       },
       logs: maskedLogs,

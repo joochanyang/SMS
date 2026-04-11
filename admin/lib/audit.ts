@@ -10,7 +10,7 @@ import { prisma } from '@shared/prisma';
 
 interface AdminUser {
   id: string;
-  email: string;
+  username: string;
   role: string;
   name: string;
 }

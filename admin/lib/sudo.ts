@@ -55,7 +55,7 @@ export async function requireSudo(req: NextRequest, admin: AdminUser): Promise<v
 
   const now = new Date();
   if (!session.sudoUntil || session.sudoUntil <= now) {
-    const error = new Error('Sudo mode required');
+    const error = new Error('Sudo 모드가 필요합니다.');
     (error as any).status = 403;
     (error as any).code = 'SUDO_REQUIRED';
     (error as any).requireSudo = true;

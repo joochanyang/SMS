@@ -28,7 +28,7 @@ const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   dailySendLimit: z.number().int().min(0).optional(),
   maxCampaignSize: z.number().int().min(0).optional(),
-  reason: z.string().min(5, '사유를 5자 이상 입력하세요.'),
+  reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-    await logAdminAction(admin, 'USER_UPDATE', 'User', id, reason, req, {
+    await logAdminAction(admin, 'USER_UPDATE', 'User', id, reason ?? '유저 정보 수정', req, {
       previousValue: {
         name: current.name,
         dailySendLimit: current.dailySendLimit,

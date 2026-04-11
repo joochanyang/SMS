@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
     const rateLimitKey = `sudo:${admin.id}`;
     const rl = checkRateLimit(rateLimitKey, RATE_LIMITS.SENSITIVE);
     if (!rl.allowed) {
-      await logAdminAction(admin, 'SUDO_RATE_LIMITED', 'SYSTEM', undefined, 'Too many sudo attempts', req, {
+      await logAdminAction(admin, 'SUDO_RATE_LIMITED', 'SYSTEM', undefined, 'Sudo 시도 횟수 초과', req, {
         result: 'FAILURE',
       });
       return NextResponse.json(
-        { error: 'Too many attempts. Try again later.', retryAfterMs: rl.retryAfterMs },
+        { error: '시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.', retryAfterMs: rl.retryAfterMs },
         { status: 429 },
       );
     }
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const success = await activateSudo(req, admin, password);
 
     if (!success) {
-      await logAdminAction(admin, 'SUDO_ACTIVATE', 'SYSTEM', undefined, 'Failed sudo activation — wrong password', req, {
+      await logAdminAction(admin, 'SUDO_ACTIVATE', 'SYSTEM', undefined, 'Sudo 활성화 실패 — 비밀번호 불일치', req, {
         result: 'FAILURE',
       });
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     // Calculate sudoUntil (same logic as activateSudo: 5 minutes)
     const sudoUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    await logAdminAction(admin, 'SUDO_ACTIVATE', 'SYSTEM', undefined, 'Sudo mode activated', req, {
+    await logAdminAction(admin, 'SUDO_ACTIVATE', 'SYSTEM', undefined, 'Sudo 모드 활성화', req, {
       result: 'SUCCESS',
     });
 

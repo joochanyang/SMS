@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       ...c,
       user: {
         ...c.user,
-        email: maskEmail(c.user.email),
+        email: c.user.email ? maskEmail(c.user.email) : null,
       },
     }));
 

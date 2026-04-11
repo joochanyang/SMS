@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       ...e,
       user: {
         ...e.user,
-        email: e.user.email.replace(/^(.{2}).*@/, (_, p1) => p1 + '***@'),
+        email: e.user.email ? e.user.email.replace(/^(.{2}).*@/, (_, p1: string) => p1 + '***@') : null,
       },
     }));
 

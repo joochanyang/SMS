@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
       ...r,
       user: {
         ...r.user,
-        email: r.user.email.replace(/^(.{2}).*@/, (_, p1) => p1 + '***@'),
+        email: r.user.email ? r.user.email.replace(/^(.{2}).*@/, (_, p1: string) => p1 + '***@') : null,
       },
     }));
 
@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
         amount,
         reason,
         evidence: evidence ?? undefined,
+        createdById: admin.id,
       },
     });
 

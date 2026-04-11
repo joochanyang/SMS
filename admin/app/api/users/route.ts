@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     // Mask sensitive data
     const masked = users.map((u) => ({
       ...u,
-      email: maskEmail(u.email),
+      email: u.email ? maskEmail(u.email) : null,
     }));
 
     return NextResponse.json({ users: masked, total, page, limit });
@@ -156,16 +156,17 @@ export async function POST(request: NextRequest) {
 
     const { email, name, password, credits, dailySendLimit, maxCampaignSize } = parsed.data;
 
-    // Check duplicate email
-    const existing = await prisma.user.findUnique({ where: { email } });
+    // Check duplicate
+    const existing = await prisma.user.findUnique({ where: { username: email } });
     if (existing) {
-      return NextResponse.json({ error: '이미 등록된 이메일입니다.' }, { status: 409 });
+      return NextResponse.json({ error: '이미 등록된 계정입니다.' }, { status: 409 });
     }
 
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
+        username: email,
         email,
         name,
         passwordHash,

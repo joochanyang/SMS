@@ -29,7 +29,7 @@ const updateAdminSchema = z.object({
   status: z.enum(['ACTIVE', 'LOCKED', 'DISABLED']).optional(),
   allowedIps: z.array(z.string()).optional(),
   dailyCreditLimit: z.number().min(0).optional(),
-  reason: z.string().min(5, '사유를 5자 이상 입력하세요.'),
+  reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       await prisma.adminSession.deleteMany({ where: { adminId: id } });
     }
 
-    await logAdminAction(admin, 'ADMIN_UPDATE', 'AdminUser', id, reason, req, {
+    await logAdminAction(admin, 'ADMIN_UPDATE', 'AdminUser', id, reason ?? '관리자 정보 수정', req, {
       previousValue: {
         role: targetAdmin.role,
         status: targetAdmin.status,

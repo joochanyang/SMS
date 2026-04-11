@@ -165,7 +165,7 @@ export async function getBlacklistedNumbers(
     hashMap.set(hash, phone);
   }
 
-  const { prisma } = await import('@/lib/prisma');
+  const { prisma } = await import('./prisma');
   const hashes = Array.from(hashMap.keys());
 
   const entries = await prisma.blacklist.findMany({
