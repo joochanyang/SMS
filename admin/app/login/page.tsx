@@ -23,6 +23,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setWarning('');
+    setLocked(false);
 
     const parsed = loginSchema.safeParse({ username, password });
     if (!parsed.success) {
