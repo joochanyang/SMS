@@ -126,7 +126,7 @@ export default function DashboardClient() {
     );
   }
 
-  const killSwitchActive = stats?.systemStatus.killSwitch ?? false;
+  const killSwitchActive = stats?.systemStatus?.killSwitch ?? false;
 
   return (
     <div className="admin-layout">
