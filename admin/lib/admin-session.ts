@@ -25,10 +25,17 @@ export function getClientUserAgent(req: NextRequest): string {
 }
 
 function cookieOptions() {
+  // HTTPS가 아닌 환경(HTTP IP 직접 접속 등)에서도 쿠키가 설정되도록
+  // FORCE_SECURE_COOKIE=false 환경변수로 제어 가능
+  const forceSecure = process.env.FORCE_SECURE_COOKIE;
+  const secure = forceSecure !== undefined
+    ? forceSecure === 'true'
+    : process.env.NODE_ENV === 'production';
+
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    secure,
+    sameSite: 'lax' as const,
     path: '/',
   };
 }
