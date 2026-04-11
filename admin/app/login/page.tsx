@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, AlertCircle, Clock } from 'lucide-react';
+import { Shield, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -16,14 +16,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
-  const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setWarning('');
-    setLocked(false);
 
     const parsed = loginSchema.safeParse({ username, password });
     if (!parsed.success) {
@@ -43,15 +41,7 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      if (res.status === 429) {
-        setLocked(true);
-        setError(data.error);
-      } else if (res.status === 403) {
-        if (data.error?.includes('잠겨')) {
-          setLocked(true);
-        }
-        setError(data.error);
-      } else if (!res.ok) {
+      if (!res.ok) {
         setError(data.error || '로그인에 실패했습니다.');
         if (data.remainingAttempts !== undefined && data.remainingAttempts <= 3) {
           setWarning(`남은 시도 횟수: ${data.remainingAttempts}회`);
@@ -81,14 +71,7 @@ export default function LoginPage() {
         <h2 className="auth-title">관리자 로그인</h2>
         <p className="auth-subtitle">관리자 계정으로 로그인하세요</p>
 
-        {locked && (
-          <div className="auth-error">
-            <Clock size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
-            <span>계정이 잠겨 있습니다. 15분 후 다시 시도하세요.</span>
-          </div>
-        )}
-
-        {error && !locked && (
+        {error && (
           <div className="auth-error">
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
             <span>{error}</span>
@@ -109,7 +92,6 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="아이디를 입력하세요"
               autoFocus
-              disabled={locked}
             />
           </div>
           <div className="form-group">
@@ -120,14 +102,13 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="비밀번호를 입력하세요"
-              disabled={locked}
             />
           </div>
           <button
             type="submit"
             className="btn btn-primary"
             style={{ width: '100%', marginTop: '8px' }}
-            disabled={loading || locked}
+            disabled={loading}
           >
             {loading && <span className="spinner" />}
             로그인
