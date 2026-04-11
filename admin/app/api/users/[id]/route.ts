@@ -26,6 +26,7 @@ function handleError(err: unknown): NextResponse {
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
+  costPerMessage: z.number().min(0).optional(),
   dailySendLimit: z.number().int().min(0).optional(),
   maxCampaignSize: z.number().int().min(0).optional(),
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
@@ -93,7 +94,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       );
     }
 
-    const { name, dailySendLimit, maxCampaignSize, reason } = parsed.data;
+    const { name, costPerMessage, dailySendLimit, maxCampaignSize, reason } = parsed.data;
 
     const current = await prisma.user.findUnique({ where: { id } });
     if (!current) {
@@ -102,6 +103,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
+    if (costPerMessage !== undefined) updateData.costPerMessage = costPerMessage;
     if (dailySendLimit !== undefined) updateData.dailySendLimit = dailySendLimit;
     if (maxCampaignSize !== undefined) updateData.maxCampaignSize = maxCampaignSize;
 
@@ -117,6 +119,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         email: true,
         name: true,
         credits: true,
+        costPerMessage: true,
         status: true,
         dailySendLimit: true,
         maxCampaignSize: true,
@@ -127,6 +130,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     await logAdminAction(admin, 'USER_UPDATE', 'User', id, reason ?? '유저 정보 수정', req, {
       previousValue: {
         name: current.name,
+        costPerMessage: Number(current.costPerMessage),
         dailySendLimit: current.dailySendLimit,
         maxCampaignSize: current.maxCampaignSize,
       },

@@ -40,8 +40,12 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as CreateCampaignBody;
     const message = body.message?.trim();
     const recipients = normalizeRecipients(body.recipients ?? []);
-    // 단가는 서버에서 결정 (클라이언트 조작 방지)
-    const costPerMessage = SMS_POLICY.defaultCostPerMessageUsd;
+    // 단가는 유저별 설정값 사용 (서버에서 결정, 클라이언트 조작 방지)
+    const userForCost = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { costPerMessage: true },
+    });
+    const costPerMessage = Number(userForCost?.costPerMessage ?? SMS_POLICY.defaultCostPerMessageKrw);
 
     if (!message) return NextResponse.json({ error: "메시지를 입력하세요." }, { status: 400 });
     if (recipients.length === 0) {

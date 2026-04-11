@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export const SMS_POLICY = {
-  defaultCostPerMessageUsd: 0.05,
+  defaultCostPerMessageKrw: 14,
   maxBatchSize: 200,
   maxRetries: 3,
   retryDelayMinutes: [0.5, 2, 5],

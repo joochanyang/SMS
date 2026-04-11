@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       // 유저 크레딧 잔액
       prisma.user.findUnique({
         where: { id: userId },
-        select: { credits: true },
+        select: { credits: true, costPerMessage: true },
       }),
 
       // 총 캠페인 수
@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
       totalDelivered,
       totalFailed,
       creditBalance: user?.credits ?? 0,
+      costPerMessage: Number(user?.costPerMessage ?? 14),
       totalSpent: Math.round(totalSpent * 100) / 100,
     };
 

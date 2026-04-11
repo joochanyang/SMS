@@ -16,6 +16,7 @@ model User {
   status          String    @default("ACTIVE")    // ACTIVE, SUSPENDED, BANNED
   suspendedAt     DateTime?
   suspendReason   String?
+  costPerMessage  Decimal   @default(14) @db.Decimal(12, 4)
   dailySendLimit  Int       @default(10000)
   maxCampaignSize Int       @default(5000)
   createdAt       DateTime  @default(now())
@@ -44,7 +45,7 @@ model SmsCampaign {
   deliveredCount  Int      @default(0)
   failedCount     Int      @default(0)
 
-  costPerMessage  Decimal  @default(0.05) @db.Decimal(12, 4)
+  costPerMessage  Decimal  @default(14) @db.Decimal(12, 4)
   estimatedCost   Decimal  @default(0)    @db.Decimal(12, 4)
   dynamicBatchSize Int     @default(200)
   tempFailureStreak Int    @default(0)

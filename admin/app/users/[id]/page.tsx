@@ -18,6 +18,7 @@ interface UserDetail {
   email: string;
   name: string;
   credits: number;
+  costPerMessage: number;
   status: string;
   dailySendLimit: number;
   maxCampaignSize: number;
@@ -79,6 +80,7 @@ export default function UserDetailPage() {
 
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editCostPerMessage, setEditCostPerMessage] = useState('');
   const [editDailyLimit, setEditDailyLimit] = useState('');
   const [editMaxCampaign, setEditMaxCampaign] = useState('');
   const [editReason, setEditReason] = useState('');
@@ -163,6 +165,7 @@ export default function UserDetailPage() {
     try {
       const body: any = { reason: editReason };
       if (editName) body.name = editName;
+      if (editCostPerMessage) body.costPerMessage = parseFloat(editCostPerMessage);
       if (editDailyLimit) body.dailySendLimit = parseInt(editDailyLimit);
       if (editMaxCampaign) body.maxCampaignSize = parseInt(editMaxCampaign);
 
@@ -254,6 +257,7 @@ export default function UserDetailPage() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button className="btn btn-outline btn-sm" onClick={() => {
                       setEditName(user.name ?? '');
+                      setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
                       setEditDailyLimit(String(user.dailySendLimit));
                       setEditMaxCampaign(String(user.maxCampaignSize));
                       setEditReason('');
@@ -289,6 +293,10 @@ export default function UserDetailPage() {
                     <div>
                       <span className="label">크레딧</span>
                       <p style={{ fontWeight: 700, fontSize: '18px' }}>{'\u20A9'}{user.credits.toLocaleString('ko-KR')}</p>
+                    </div>
+                    <div>
+                      <span className="label">건당 단가</span>
+                      <p style={{ fontWeight: 700, fontSize: '18px', color: 'var(--status-info)' }}>{'\u20A9'}{Number(user.costPerMessage ?? 14).toLocaleString('ko-KR')}</p>
                     </div>
                     <div><span className="label">일일 발송 한도</span><p>{user.dailySendLimit.toLocaleString('ko-KR')}건</p></div>
                     <div><span className="label">최대 캠페인 크기</span><p>{user.maxCampaignSize.toLocaleString('ko-KR')}건</p></div>
@@ -432,6 +440,10 @@ export default function UserDetailPage() {
               <div>
                 <label className="label">이름</label>
                 <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label className="label">건당 단가 (원)</label>
+                <input className="input" type="number" min="0" step="1" value={editCostPerMessage} onChange={(e) => setEditCostPerMessage(e.target.value)} placeholder="14" style={{ width: '100%' }} />
               </div>
               <div>
                 <label className="label">일일 발송 한도</label>

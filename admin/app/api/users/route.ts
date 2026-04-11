@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
           email: true,
           name: true,
           credits: true,
+          costPerMessage: true,
           status: true,
           dailySendLimit: true,
           maxCampaignSize: true,

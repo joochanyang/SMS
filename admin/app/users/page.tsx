@@ -12,6 +12,7 @@ interface UserRow {
   email: string;
   name: string;
   credits: number;
+  costPerMessage: number;
   status: string;
   createdAt: string;
 }
@@ -114,6 +115,16 @@ export default function UsersPage() {
       render: (row) => (
         <span style={{ fontWeight: 600 }}>
           {'\u20A9'}{row.credits.toLocaleString('ko-KR')}
+        </span>
+      ),
+    },
+    {
+      key: 'costPerMessage',
+      label: '건당 단가',
+      sortable: false,
+      render: (row) => (
+        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
+          {'\u20A9'}{Number(row.costPerMessage ?? 14).toLocaleString('ko-KR')}
         </span>
       ),
     },

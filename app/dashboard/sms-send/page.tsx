@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import { Send, Upload, Info, Smartphone, Users, AlertTriangle, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, X as XIcon } from 'lucide-react';
 
-const COST_PER_MESSAGE_USD = 0.05;
 const DEFAULT_BATCH_SIZE = 200;
 
 // GSM-7 basic character set for client-side detection
@@ -32,6 +31,7 @@ function getSmsInfo(text: string) {
     charCount,
     maxChars: singleMax,
     parts,
+    remaining: singleMax - charCount,
   };
 }
 
@@ -57,7 +57,6 @@ export default function SmsSendPage() {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [message, setMessage] = useState('');
   const [recipients, setRecipients] = useState('');
-  const [campaignName, setCampaignName] = useState('');
   const [csvFilename, setCsvFilename] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -69,6 +68,22 @@ export default function SmsSendPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const activeCampaignIdRef = useRef<string | null>(null);
   const cancelledRef = useRef(false);
+
+  // 유저 정보 (크레딧 잔액, 건당 단가)
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [costPerMessage, setCostPerMessage] = useState<number>(14);
+
+  useEffect(() => {
+    fetch('/api/dashboard/stats')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.overview) {
+          setCreditBalance(Number(data.overview.creditBalance ?? 0));
+          setCostPerMessage(Number(data.overview.costPerMessage ?? 14));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const smsInfo = useMemo(() => getSmsInfo(message), [message]);
 
@@ -87,7 +102,8 @@ export default function SmsSendPage() {
   const validRecipients = useMemo(() => parsedRecipients.filter(isValidPhone), [parsedRecipients]);
   const invalidRecipients = useMemo(() => parsedRecipients.filter((r) => !isValidPhone(r)), [parsedRecipients]);
 
-  const estimatedTotalCost = validRecipients.length * COST_PER_MESSAGE_USD;
+  const estimatedTotalCost = validRecipients.length * costPerMessage;
+  const availableSendCount = costPerMessage > 0 ? Math.floor(creditBalance / costPerMessage) : 0;
   const isOverLimit = smsInfo.charCount > smsInfo.maxChars;
 
   const parseCsvFile = (file: File) => {
@@ -131,7 +147,6 @@ export default function SmsSendPage() {
   const processCampaignLoop = async (campaignId: string) => {
     for (let i = 0; i < 1000; i++) {
       if (cancelledRef.current) {
-        // 취소 상태 조회 후 반환
         const detailRes = await fetch(`/api/sms/campaign/${campaignId}`);
         const detailData = await detailRes.json();
         return detailData.campaign;
@@ -203,7 +218,6 @@ export default function SmsSendPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: campaignName || undefined,
           recipients: validRecipients,
           message,
         }),
@@ -230,6 +244,10 @@ export default function SmsSendPage() {
       setCompletedCampaign(completed);
       setProgress(null);
       setStatusMessage(null);
+
+      // 발송 후 크레딧 잔액 갱신
+      setCreditBalance((prev) => Math.max(0, prev - estimatedTotalCost));
+
       if (finalCampaign.failedCount > 0) {
         setStatusError('일부 건이 실패했습니다. 히스토리에서 상세 내역을 확인하세요.');
       }
@@ -254,11 +272,23 @@ export default function SmsSendPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>캠페인 이름 (선택)</label>
-              <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="예: 4월 프로모션" disabled={isSending} style={{ width: '100%', backgroundColor: 'rgba(2, 6, 23, 0.5)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text-main)', outline: 'none', opacity: isSending ? 0.6 : 1 }} />
+            {/* 발송 정보 카드 (캠페인 이름 대신) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+              <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>발송 건수</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>{validRecipients.length}건</div>
+              </div>
+              <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>잔여 발송 가능</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#6ee7b7' }}>{availableSendCount.toLocaleString('ko-KR')}건</div>
+              </div>
+              <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.15)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>크레딧 잔액</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fb923c' }}>₩{creditBalance.toLocaleString('ko-KR')}</div>
+              </div>
             </div>
 
+            {/* 수신 번호 (먼저) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                 {activeTab === 'single' ? <Smartphone size={16} /> : <Users size={16} />}
@@ -326,6 +356,7 @@ export default function SmsSendPage() {
               )}
             </div>
 
+            {/* 메시지 내용 (수신번호 다음) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>메시지 내용</label>
@@ -335,6 +366,9 @@ export default function SmsSendPage() {
                   </span>
                   <span style={{ color: isOverLimit ? '#ef4444' : 'var(--primary)', fontWeight: 600 }}>
                     {smsInfo.charCount} / {smsInfo.maxChars}
+                  </span>
+                  <span style={{ color: isOverLimit ? '#ef4444' : '#6ee7b7', fontWeight: 600, fontSize: '0.7rem' }}>
+                    (남은 글자: {smsInfo.remaining > 0 ? smsInfo.remaining : 0}자)
                   </span>
                   {isOverLimit && (
                     <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -463,8 +497,11 @@ export default function SmsSendPage() {
             </div>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
               <strong style={{ color: 'var(--text-main)' }}>{validRecipients.length}명</strong>에게
-              <strong style={{ color: 'var(--primary)' }}> ${estimatedTotalCost.toFixed(2)}</strong> 비용으로
+              <strong style={{ color: 'var(--primary)' }}> ₩{estimatedTotalCost.toLocaleString('ko-KR')}</strong> 비용으로
               SMS를 발송합니다.
+              <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                (건당 ₩{costPerMessage.toLocaleString('ko-KR')})
+              </div>
               {invalidRecipients.length > 0 && (
                 <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#fca5a5' }}>
                   (유효하지 않은 번호 {invalidRecipients.length}개는 제외됩니다)
@@ -497,6 +534,7 @@ export default function SmsSendPage() {
       )}
 
       <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* 휴대폰 미리보기 */}
         <div style={{ position: 'relative' }}>
           <div style={{ width: '300px', height: '600px', border: '12px solid #1e293b', borderRadius: '40px', margin: '0 auto', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
             <div style={{ height: '60px', backgroundColor: '#1e293b', padding: '25px 1rem 0', textAlign: 'center', borderBottom: '1px solid #334155' }}>
@@ -506,10 +544,18 @@ export default function SmsSendPage() {
               <div style={{ backgroundColor: '#1e293b', padding: '1rem', borderRadius: '12px 12px 12px 2px', fontSize: '0.875rem', color: '#fff', wordBreak: 'break-all', minHeight: '40px' }}>
                 {message || '미리보기가 여기에 표시됩니다...'}
               </div>
+              {/* 미리보기 글자수 표시 */}
+              <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: isOverLimit ? '#ef4444' : '#64748b' }}>
+                <span>{smsInfo.encoding}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {smsInfo.charCount} / {smsInfo.maxChars}자 (남은 글자: {smsInfo.remaining > 0 ? smsInfo.remaining : 0}자)
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
+        {/* 비용 예상 카드 */}
         <div className="glass-card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: 'var(--primary)', fontWeight: 600 }}>
             <Info size={16} /> 비용 예상
@@ -525,12 +571,12 @@ export default function SmsSendPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
               <span style={{ color: 'var(--text-secondary)' }}>건당 비용</span>
-              <span>${COST_PER_MESSAGE_USD.toFixed(2)}</span>
+              <span>₩{costPerMessage.toLocaleString('ko-KR')}</span>
             </div>
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 700 }}>
               <span style={{ color: 'var(--primary)' }}>예상 총 비용</span>
-              <span>${estimatedTotalCost.toFixed(2)}</span>
+              <span>₩{estimatedTotalCost.toLocaleString('ko-KR')}</span>
             </div>
           </div>
           <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
