@@ -86,10 +86,37 @@ export default function DashboardClient() {
       setAdmin(sessionData.admin);
 
       if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
+        const raw = await statsRes.json();
+        // API 응답을 클라이언트 형태로 매핑
+        const totalSent = raw.today?.totalSent ?? raw.totalSent ?? 0;
+        const successCount = raw.today?.successCount ?? 0;
+        const failedCount = raw.today?.failedCount ?? raw.failed ?? 0;
+        const successRate = totalSent > 0 ? (successCount / totalSent) * 100 : (raw.successRate ?? 0);
+        setStats({
+          totalSent,
+          totalSentChange: parseFloat(raw.comparison?.sentChange ?? raw.totalSentChange ?? '0'),
+          successRate,
+          successRateChange: parseFloat(raw.comparison?.successChange ?? raw.successRateChange ?? '0'),
+          failed: failedCount,
+          failedChange: parseFloat(raw.comparison?.failedChange ?? raw.failedChange ?? '0'),
+          totalCost: raw.today?.totalCost ?? raw.totalCost ?? 0,
+          totalCostChange: parseFloat(raw.comparison?.costChange ?? raw.totalCostChange ?? '0'),
+          tpsData: raw.tpsData ?? [],
+          activeCampaigns: Array.isArray(raw.activeCampaigns) ? raw.activeCampaigns : [],
+          systemStatus: {
+            infobip: raw.system?.infobip ?? raw.systemStatus?.infobip ?? 'unknown',
+            database: raw.system?.database ?? raw.systemStatus?.database ?? 'unknown',
+            killSwitch: raw.system?.killSwitchLevel === 'FULL' || raw.systemStatus?.killSwitch === true,
+          },
+          recentAlerts: (raw.recentAlerts ?? []).map((a: Record<string, string>) => ({
+            id: a.id,
+            action: a.action,
+            adminEmail: a.adminEmail,
+            result: a.result ?? a.reason ?? '',
+            createdAt: a.createdAt ?? a.timestamp ?? '',
+          })),
+        });
       } else {
-        // Use placeholder data if API not yet implemented
         setStats({
           totalSent: 0,
           totalSentChange: 0,
@@ -292,12 +319,12 @@ export default function DashboardClient() {
                     height: '8px',
                     borderRadius: '50%',
                     background:
-                      stats?.systemStatus.infobip === 'ok'
+                      stats?.systemStatus?.infobip === 'ok'
                         ? 'var(--status-success)'
                         : 'var(--status-warning)',
                   }}
                 />
-                {stats?.systemStatus.infobip === 'ok' ? '정상' : '확인 필요'}
+                {stats?.systemStatus?.infobip === 'ok' ? '정상' : '확인 필요'}
               </span>
             </div>
             <div className="system-status-item">
@@ -311,12 +338,12 @@ export default function DashboardClient() {
                     height: '8px',
                     borderRadius: '50%',
                     background:
-                      stats?.systemStatus.database === 'ok'
+                      stats?.systemStatus?.database === 'ok'
                         ? 'var(--status-success)'
                         : 'var(--status-warning)',
                   }}
                 />
-                {stats?.systemStatus.database === 'ok' ? '정상' : '확인 필요'}
+                {stats?.systemStatus?.database === 'ok' ? '정상' : '확인 필요'}
               </span>
             </div>
             <div className="system-status-item">
