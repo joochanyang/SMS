@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
 import {
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+  const expected = `Bearer ${cronSecret}`;
+  const isValid = authHeader &&
+    authHeader.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+  if (!isValid) {
     return NextResponse.json(
       { error: "인증이 필요합니다." },
       { status: 401 },
@@ -40,6 +45,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const now = new Date();
+
+    // 예약 시간이 도달한 SCHEDULED 캠페인을 QUEUED로 전환
+    await prisma.smsCampaign.updateMany({
+      where: {
+        status: "SCHEDULED",
+        scheduledAt: { lte: now },
+      },
+      data: { status: "QUEUED" },
+    });
 
     // QUEUED 또는 SENDING 상태의 캠페인을 createdAt 순으로 조회
     // 쿨다운 중인 캠페인 제외

@@ -1,6 +1,6 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> 마지막 업데이트: 2026-04-10 (Wave 1+2 전체 완료)
+> 마지막 업데이트: 2026-04-11 (USDT-TRC20 자동 충전 시스템 완료)
 > 프로젝트: `/Users/mr.joo/Desktop/sms문자사이트`
 
 ---
@@ -33,6 +33,27 @@
 ### 관리자 패널 (`/admin` 별도 Next.js 앱)
 - [x] 대시보드, 유저관리, 캠페인관리, 크레딧/환불, 블랙리스트, 템플릿, 감사로그, 설정
 - [x] MFA (TOTP), RBAC, Kill Switch, Sudo 모드
+
+### USDT-TRC20 자동 충전 시스템 (2026-04-11)
+- [x] **Prisma 스키마**: `UsdtDeposit` 모델 (TXID unique 중복 방지, 상태 추적, 시세 Lock)
+- [x] **Upbit 시세 연동**: WebSocket 실시간 스트리밍 + REST API fallback (5초 캐시)
+- [x] **입금 API** (`/api/usdt/deposit`): 수량 확정 → 시세 Lock (15분) → 지갑 주소 제공
+- [x] **TXID 검증 API** (`/api/usdt/verify`): TronGrid + TronScan 이중 fallback 검증
+  - Status: SUCCESS 확인
+  - To Address: 시스템 관리자 주소 일치
+  - Asset: USDT (TRC20) 확인
+  - Amount: 신청 수량 일치 (0.01 USDT 허용 오차)
+  - Duplicate Check: TXID DB 중복 체크
+- [x] **자동 충전**: 검증 통과 시 즉시 크레딧 충전 (Prisma 트랜잭션 + CreditLedger 감사 추적)
+- [x] **프론트엔드**: 4단계 입금 플로우 (수량 입력 → 주소 표시 → TXID 검증 → 완료)
+  - 실시간 시세 표시 (LIVE WebSocket 상태 인디케이터)
+  - 금액 프리셋 (10/50/100/500/1000 USDT)
+  - KRW → USD 실시간 환산
+  - 카운트다운 타이머 (시세 Lock 유효 기간)
+  - 주소 복사 기능
+  - TronScan 외부 링크
+  - 입금 내역 히스토리
+- [x] **보안**: Rate Limiting (검증 API 3/분, 20/시간), 만료 처리, 네트워크 경고
 
 ---
 

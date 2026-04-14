@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   User,
+  Radio,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -33,11 +34,12 @@ const navItems = [
   { href: '/credits', label: '크레딧 관리', icon: Wallet },
   { href: '/blacklist', label: '블랙리스트', icon: Ban },
   { href: '/templates', label: '템플릿 관리', icon: FileText },
+  { href: '/sms-providers', label: 'SMS 라인 관리', icon: Radio },
   { href: '/settings', label: '시스템 설정', icon: Settings },
   { href: '/audit', label: '감사 로그', icon: ClipboardList },
 ];
 
-export default function Sidebar({ adminName, adminEmail, adminRole, killSwitchActive }: SidebarProps) {
+export default function Sidebar({ adminName, adminRole, killSwitchActive }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);

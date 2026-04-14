@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
     const campaignStatusLabels: Record<string, string> = {
       DRAFT: "초안",
       QUEUED: "대기 중",
+      SCHEDULED: "예약됨",
       SENDING: "발송 중",
       COMPLETED: "완료",
       CANCELLED: "취소됨",

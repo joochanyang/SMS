@@ -85,8 +85,8 @@ export default function CouponRedeem() {
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          backgroundColor: result.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-          color: result.success ? 'var(--primary)' : '#ef4444',
+          backgroundColor: result.success ? 'rgba(255, 255, 255, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+          color: result.success ? 'var(--text-main)' : '#ef4444',
         }}>
           {result.success && <CheckCircle2 size={16} />}
           {result.message}

@@ -2,8 +2,9 @@ import React from 'react';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { Globe2, Send, CreditCard, History, BarChart3, LayoutDashboard } from 'lucide-react';
+import { Globe2 } from 'lucide-react';
 import SignOutButton from './_components/signout-button';
+import SidebarNav from './_components/sidebar-nav';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -17,43 +18,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Sidebar */}
       <aside style={{
         width: '260px',
-        borderRight: '1px solid var(--border)',
-        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        borderRight: '1px solid var(--sidebar-border)',
+        backgroundColor: 'var(--sidebar-surface)',
+        color: 'var(--sidebar-text)',
         display: 'flex',
         flexDirection: 'column',
       }}>
-        <div style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '1.25rem', borderBottom: '1px solid var(--border)' }}>
-          <Globe2 color="var(--primary)" />
-          <span>Sovereign<span style={{ color: 'var(--primary)' }}>SMS</span></span>
+        <div style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1.25rem', borderBottom: '1px solid var(--sidebar-border)', letterSpacing: '-0.02em' }}>
+          <Globe2 color="var(--sidebar-text)" />
+          <span>Sovereign<span style={{ color: 'var(--sidebar-text-sec)' }}>SMS</span></span>
         </div>
         
-        <nav style={{ flex: 1, padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600, paddingLeft: '0.5rem', marginBottom: '0.5rem' }}>메뉴</div>
-          <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)', transition: 'background-color 0.2s ease', fontWeight: 500 }}>
-            <LayoutDashboard size={18} />
-            대시보드
-          </a>
-          <a href="/dashboard/sms-send" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-main)', backgroundColor: 'rgba(16, 185, 129, 0.1)', fontWeight: 500 }}>
-            <Send size={18} color="var(--primary)" />
-            문자 발송
-          </a>
-          <a href="/dashboard/history" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)', transition: 'background-color 0.2s ease', fontWeight: 500 }}>
-            <History size={18} />
-            발송 내역
-          </a>
-          <a href="/dashboard/campaigns" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)', transition: 'background-color 0.2s ease', fontWeight: 500 }}>
-            <BarChart3 size={18} />
-            캠페인 관리
-          </a>
-          <a href="/dashboard/wallet" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)', transition: 'background-color 0.2s ease', fontWeight: 500 }}>
-            <CreditCard size={18} />
-            지갑 / 크레딧
-          </a>
-        </nav>
+        <SidebarNav />
 
-        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--sidebar-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '18px', backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', fontWeight: 600 }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '0px', backgroundColor: 'var(--sidebar-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--sidebar-border)', fontWeight: 600 }}>
               {session.user?.name?.[0]?.toUpperCase() || session.user?.email?.[0]?.toUpperCase()}
             </div>
             <div style={{ overflow: 'hidden' }}>
@@ -65,8 +45,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <header style={{ height: '70px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 2rem', backgroundColor: 'rgba(2, 6, 23, 0.7)', backdropFilter: 'blur(12px)' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-color)' }}>
+        <header style={{ height: '70px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 2rem', backgroundColor: '#FFFFFF' }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>대시보드</h1>
         </header>
         <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>

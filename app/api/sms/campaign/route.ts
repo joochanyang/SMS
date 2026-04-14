@@ -9,12 +9,15 @@ import {
   getSmsSegmentInfo,
   getBlacklistedNumbers,
 } from "@/lib/sms-policy";
+import { generateSenderId, isValidSenderId } from "@/lib/sender-id";
 import { withRateLimit } from "@/lib/api-rate-limit";
 
 type CreateCampaignBody = {
   name?: string;
+  senderId?: string;
   message: string;
   recipients: string[];
+  scheduledAt?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -40,6 +43,33 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as CreateCampaignBody;
     const message = body.message?.trim();
     const recipients = normalizeRecipients(body.recipients ?? []);
+
+    // 발신번호: 유저 입력값 검증 또는 자동 생성
+    let senderId: string;
+    if (body.senderId?.trim()) {
+      const trimmed = body.senderId.trim();
+      if (!isValidSenderId(trimmed)) {
+        return NextResponse.json(
+          { error: "발신번호는 영문/숫자 조합 1~11자여야 합니다." },
+          { status: 400 },
+        );
+      }
+      senderId = trimmed;
+    } else {
+      senderId = generateSenderId();
+    }
+
+    // 예약 발송 시간 검증
+    let scheduledAt: Date | null = null;
+    if (body.scheduledAt) {
+      scheduledAt = new Date(body.scheduledAt);
+      if (isNaN(scheduledAt.getTime())) {
+        return NextResponse.json({ error: "예약 시간 형식이 올바르지 않습니다." }, { status: 400 });
+      }
+      if (scheduledAt.getTime() <= Date.now()) {
+        return NextResponse.json({ error: "예약 시간은 현재 시간 이후여야 합니다." }, { status: 400 });
+      }
+    }
     // 단가는 유저별 설정값 사용 (서버에서 결정, 클라이언트 조작 방지)
     const userForCost = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -120,10 +150,12 @@ export async function POST(req: NextRequest) {
       }
 
       // 크레딧 atomic 차감 — WHERE 조건으로 잔액 검증 (race condition 방지)
+      let updatedUser;
       try {
-        await tx.user.update({
+        updatedUser = await tx.user.update({
           where: { id: user.id, credits: { gte: estimatedCost } },
           data: { credits: { decrement: estimatedCost } },
+          select: { credits: true },
         });
       } catch (e: any) {
         // Prisma P2025: 조건에 맞는 레코드 없음 = 크레딧 부족
@@ -137,14 +169,16 @@ export async function POST(req: NextRequest) {
         data: {
           userId: user.id,
           name: body.name?.trim().slice(0, 200) || null,
+          senderId,
           messageBody: message,
           messageType: "TRANSACTIONAL",
-          status: "QUEUED",
+          status: scheduledAt ? "SCHEDULED" : "QUEUED",
           totalRecipients: filteredRecipients.length,
           costPerMessage: costPerMessage,
           estimatedCost,
           dynamicBatchSize: SMS_POLICY.maxBatchSize,
           tempFailureStreak: 0,
+          ...(scheduledAt && { scheduledAt }),
         },
       });
 
@@ -168,16 +202,31 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // CreditLedger 감사 추적
+      await tx.creditLedger.create({
+        data: {
+          userId: user.id,
+          type: "CAMPAIGN_DEDUCT",
+          amount: -estimatedCost,
+          balanceAfter: updatedUser.credits,
+          referenceType: "CAMPAIGN",
+          referenceId: created.id,
+          description: `SMS 캠페인 차감: ${filteredRecipients.length}건`,
+        },
+      });
+
       return created;
     });
 
     return NextResponse.json(
       {
         campaignId: campaign.id,
+        senderId,
         totalRecipients: campaign.totalRecipients,
         estimatedCost: campaign.estimatedCost,
         costPerMessage: campaign.costPerMessage,
         status: campaign.status,
+        ...(scheduledAt && { scheduledAt: scheduledAt.toISOString() }),
         smsInfo: {
           encoding: segmentInfo.encoding,
           charCount: segmentInfo.charCount,
@@ -213,34 +262,48 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
 
-    logger.info("캠페인 목록 조회 요청", { context: "campaign", userId: session.user.id });
+    // 페이지네이션 파라미터 파싱
+    const { searchParams } = req.nextUrl;
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20));
+    const skip = (page - 1) * limit;
 
-    const campaigns = await prisma.smsCampaign.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        name: true,
-        messageType: true,
-        status: true,
-        totalRecipients: true,
-        processedCount: true,
-        deliveredCount: true,
-        failedCount: true,
-        costPerMessage: true,
-        estimatedCost: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    logger.info("캠페인 목록 조회 요청", { context: "campaign", userId: session.user.id, metadata: { page, limit } });
 
-    return NextResponse.json({ campaigns }, { status: 200 });
+    const where = { userId: session.user.id };
+
+    const [campaigns, total] = await Promise.all([
+      prisma.smsCampaign.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          messageBody: true,
+          messageType: true,
+          status: true,
+          totalRecipients: true,
+          processedCount: true,
+          deliveredCount: true,
+          failedCount: true,
+          costPerMessage: true,
+          estimatedCost: true,
+          scheduledAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.smsCampaign.count({ where }),
+    ]);
+
+    return NextResponse.json({ campaigns, total, page, limit }, { status: 200 });
   } catch (e) {
     logger.error("캠페인 목록 조회 오류", {
       context: "campaign",

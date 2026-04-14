@@ -38,6 +38,7 @@
     "../lib/prisma.ts",
     "../lib/infobip.ts",
     "../lib/sms-policy.ts",
+    "../lib/rate-limiter.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

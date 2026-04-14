@@ -91,6 +91,74 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 }
 
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
+
+    const { id } = await context.params;
+
+    const campaign = await prisma.smsCampaign.findUnique({ where: { id } });
+    if (!campaign || campaign.userId !== session.user.id) {
+      return NextResponse.json({ error: "캠페인을 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    // 활성 캠페인은 삭제 불가 — 먼저 취소(cancel)해야 함
+    if (["QUEUED", "SENDING"].includes(campaign.status)) {
+      return NextResponse.json(
+        { error: "발송 중이거나 대기 중인 캠페인은 삭제할 수 없습니다. 먼저 취소하세요." },
+        { status: 400 },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 미처리 메시지가 남아있으면 환불 처리
+      const unprocessedCount = await tx.smsLog.count({
+        where: { campaignId: id, status: { in: ["PENDING", "RETRY_PENDING"] } },
+      });
+
+      if (unprocessedCount > 0) {
+        const refundAmount = unprocessedCount * Number(campaign.costPerMessage);
+        if (refundAmount > 0) {
+          const updatedUser = await tx.user.update({
+            where: { id: campaign.userId },
+            data: { credits: { increment: refundAmount } },
+            select: { credits: true },
+          });
+          await tx.transaction.create({
+            data: {
+              userId: campaign.userId,
+              amount: refundAmount,
+              type: "DEPOSIT",
+              description: `캠페인 삭제 환불 (미처리 ${unprocessedCount}건)`,
+            },
+          });
+          // CreditLedger 감사 추적
+          await tx.creditLedger.create({
+            data: {
+              userId: campaign.userId,
+              type: "CAMPAIGN_REFUND",
+              amount: refundAmount,
+              balanceAfter: updatedUser.credits,
+              referenceType: "CAMPAIGN",
+              referenceId: id,
+              description: `캠페인 삭제 환불 (미처리 ${unprocessedCount}건)`,
+            },
+          });
+        }
+      }
+
+      await tx.smsLog.deleteMany({ where: { campaignId: id } });
+      await tx.smsCampaign.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (e) {
+    console.error("Delete campaign error:", e);
+    return NextResponse.json({ error: "삭제 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);

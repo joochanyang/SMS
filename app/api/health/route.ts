@@ -11,15 +11,9 @@ export async function GET() {
     // DB 연결 확인
     await prisma.$queryRaw`SELECT 1`;
 
-    // 처리 대기 중인 캠페인 수
-    const pendingCampaigns = await prisma.smsCampaign.count({
-      where: { status: { in: ["QUEUED", "SENDING"] } },
-    });
-
     return NextResponse.json({
       status: "ok",
       timestamp: new Date().toISOString(),
-      pendingCampaigns,
     });
   } catch {
     return NextResponse.json(

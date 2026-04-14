@@ -50,9 +50,9 @@ export default function LoginPage() {
         style={{ width: '100%', maxWidth: '400px', padding: '3rem 2rem' }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1.5rem', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>
             <Globe2 color="var(--primary)" size={28} />
-            <span>Sovereign<span style={{ color: 'var(--primary)' }}>SMS</span></span>
+            <span>Sovereign<span style={{ color: 'var(--text-secondary)' }}>SMS</span></span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>계정에 로그인하세요</p>
         </div>

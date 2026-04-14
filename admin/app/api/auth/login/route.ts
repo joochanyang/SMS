@@ -8,33 +8,7 @@ import {
   getClientIp,
   getClientUserAgent,
 } from '@/lib/admin-session';
-
-// ---------------------------------------------------------------------------
-// In-memory rate limiter: 5 attempts per IP per 15 minutes
-// ---------------------------------------------------------------------------
-
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const RATE_LIMIT_MAX = 5;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  entry.count++;
-  return entry.count <= RATE_LIMIT_MAX;
-}
-
-// Periodic cleanup to prevent memory leak (every 10 min)
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of rateLimitMap) {
-    if (now > entry.resetAt) rateLimitMap.delete(ip);
-  }
-}, 10 * 60 * 1000).unref?.();
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -87,8 +61,9 @@ export async function POST(request: NextRequest) {
     const ip = getClientIp(request);
     const ua = getClientUserAgent(request);
 
-    // 1. Rate limit
-    if (!checkRateLimit(ip)) {
+    // 1. Rate limit — 공유 모듈 사용
+    const rl = checkRateLimit(`login:${ip}`, RATE_LIMITS.LOGIN);
+    if (!rl.allowed) {
       return NextResponse.json(
         { error: '로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도하세요.' },
         { status: 429 },

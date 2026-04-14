@@ -3,13 +3,14 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
-import { infobipClient } from "@/lib/infobip";
+import { getActiveProvider } from "@/lib/sms-providers/router";
 import {
   getRetryDelayMs,
   isTemporaryProviderError,
   SMS_POLICY,
   getBlacklistedNumbers,
 } from "@/lib/sms-policy";
+import { generateSenderId } from "@/lib/sender-id";
 
 const DEFAULT_BATCH_SIZE = SMS_POLICY.maxBatchSize;
 const MIN_DYNAMIC_BATCH_SIZE = 20;
@@ -90,26 +91,30 @@ export async function processCampaignBatch(
     SMS_POLICY.maxBatchSize,
   );
 
-  // PENDING / RETRY_PENDING 로그 조회
+  // PENDING / RETRY_PENDING 로그를 원자적으로 선점 (FOR UPDATE SKIP LOCKED)
+  // → 다른 프로세스(크론잡/프론트엔드)가 동일 건을 중복 발송하는 것을 완전 차단
+  // PostgreSQL FOR UPDATE SKIP LOCKED: 이미 다른 트랜잭션이 잠근 행은 건너뜀
   const now = new Date();
-  const pendingLogs = await prisma.smsLog.findMany({
-    where: {
-      campaignId,
-      OR: [
-        { status: "PENDING" },
-        { status: "RETRY_PENDING", nextRetryAt: { lte: now } },
-      ],
-    },
-    orderBy: { createdAt: "asc" },
-    take: effectiveBatchSize,
-    select: {
-      id: true,
-      targetNumber: true,
-      messageBody: true,
-      cost: true,
-      retryCount: true,
-    },
-  });
+  const pendingLogs = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      targetNumber: string;
+      messageBody: string;
+      cost: number;
+      retryCount: number;
+    }>
+  >`WITH claimed AS (
+       SELECT id FROM "SmsLog"
+       WHERE "campaignId" = ${campaignId}
+         AND (status = 'PENDING' OR (status = 'RETRY_PENDING' AND "nextRetryAt" <= ${now}))
+       ORDER BY "createdAt" ASC
+       LIMIT ${effectiveBatchSize}
+       FOR UPDATE SKIP LOCKED
+     )
+     UPDATE "SmsLog" SET status = 'SENDING'
+     FROM claimed
+     WHERE "SmsLog".id = claimed.id
+     RETURNING "SmsLog".id, "SmsLog"."targetNumber", "SmsLog"."messageBody", "SmsLog".cost, "SmsLog"."retryCount"`;
 
   // 블랙리스트 필터링
   const blacklisted = await getBlacklistedNumbers(
@@ -122,7 +127,7 @@ export async function processCampaignBatch(
       ? pendingLogs.filter((l) => !blacklisted.has(l.targetNumber))
       : pendingLogs;
 
-  // 블랙리스트 차단 처리 + 환불
+  // 블랙리스트 차단 처리 + 환불 (이미 SENDING 상태이므로 FAILED로 전환)
   if (blockedLogs.length > 0) {
     await prisma.$transaction(async (tx) => {
       for (const log of blockedLogs) {
@@ -162,7 +167,7 @@ export async function processCampaignBatch(
   // 모든 건이 블랙리스트 차단된 경우
   if (sendableLogs.length === 0 && pendingLogs.length === blockedLogs.length) {
     const remainingCount = await prisma.smsLog.count({
-      where: { campaignId, status: { in: ["PENDING", "RETRY_PENDING"] } },
+      where: { campaignId, status: { in: ["PENDING", "RETRY_PENDING", "SENDING"] } },
     });
     if (remainingCount === 0) {
       await prisma.smsCampaign.update({
@@ -195,17 +200,29 @@ export async function processCampaignBatch(
     });
   }
 
-  // Infobip 발송
-  let infobipResponse: any = null;
+  // 발신번호: 캠페인에 저장된 값 사용 (없으면 랜덤 생성 후 저장)
+  let senderId = campaign.senderId;
+  if (!senderId) {
+    senderId = generateSenderId();
+    await prisma.smsCampaign.update({
+      where: { id: campaignId },
+      data: { senderId },
+    });
+  }
+
+  // Provider 추상화 발송
+  const provider = await getActiveProvider();
+  let providerResults: import("@/lib/sms-providers/types").SmsSendResult[] = [];
   try {
-    infobipResponse = await infobipClient.channels.sms.send({
-      messages: sendableLogs.map((log) => ({
-        destinations: [{ to: log.targetNumber }],
+    providerResults = await provider.sendBatch(
+      sendableLogs.map((log) => ({
+        to: log.targetNumber,
         text: log.messageBody,
-      })),
-    } as any);
+        from: senderId!,
+      }))
+    );
   } catch (e) {
-    console.error("Infobip 배치 발송 오류:", e);
+    console.error(`[${provider.name}] 배치 발송 오류:`, e);
 
     // 일시 장애 — 재시도 대기열로 이동
     await prisma.$transaction(async (tx) => {
@@ -264,30 +281,19 @@ export async function processCampaignBatch(
     );
   }
 
-  // Infobip 응답 파싱
-  const responseMessages: any[] =
-    (Array.isArray(infobipResponse?.messages) && infobipResponse.messages) ||
-    (Array.isArray(infobipResponse?.data?.messages) &&
-      infobipResponse.data.messages) ||
-    [];
-
-  // DB 업데이트 — 개별 메시지 상태 반영 + 캠페인 카운터 일괄 업데이트
+  // Provider 응답 파싱 — 통일된 SmsSendResult 사용
   await prisma.$transaction(async (tx) => {
     let sentCount = 0;
     let failedFromProviderCount = 0;
 
     for (let i = 0; i < sendableLogs.length; i++) {
       const log = sendableLogs[i];
-      const msg = responseMessages[i] || null;
-      const messageId =
-        msg?.messageId ?? msg?.message_id ?? msg?.id ?? null;
-      const providerStatus =
-        msg?.status?.name ??
-        msg?.status?.groupName ??
-        msg?.status?.description ??
-        "SENT";
+      const result = providerResults[i] || null;
+      const messageId = result?.messageId ?? null;
+      const providerStatus = result?.providerStatus ?? result?.status ?? "SENT";
 
-      const tempError = isTemporaryProviderError(String(providerStatus));
+      const isFailed = result?.status === "FAILED";
+      const tempError = isFailed || isTemporaryProviderError(String(providerStatus));
       const isRetryExceeded = log.retryCount + 1 >= SMS_POLICY.maxRetries;
       const nextStatus = tempError
         ? isRetryExceeded
@@ -308,7 +314,7 @@ export async function processCampaignBatch(
               : null,
           providerError:
             nextStatus === "FAILED"
-              ? "일시 장애 최대 재시도 초과"
+              ? (result?.error || "일시 장애 최대 재시도 초과")
               : null,
         },
       });
@@ -338,11 +344,11 @@ export async function processCampaignBatch(
     });
   });
 
-  // 남은 PENDING/RETRY_PENDING 확인
+  // 남은 PENDING/RETRY_PENDING/SENDING 확인
   const remainingCount = await prisma.smsLog.count({
     where: {
       campaignId,
-      status: { in: ["PENDING", "RETRY_PENDING"] },
+      status: { in: ["PENDING", "RETRY_PENDING", "SENDING"] },
     },
   });
 

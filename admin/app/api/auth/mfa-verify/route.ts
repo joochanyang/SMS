@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import * as OTPAuth from 'otpauth';
 import crypto from 'crypto';
 import { getClientIp, getClientUserAgent } from '@/lib/admin-session';
+import { decryptMfaSecret } from '@/lib/mfa-crypto';
 
 const SESSION_COOKIE = 'admin_session';
 
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MFA가 설정되지 않았습니다.' }, { status: 400 });
     }
 
+    // 암호화된 MFA 시크릿 복호화
+    const plainSecret = decryptMfaSecret(admin.mfaSecret);
+
     let verified = false;
     let usedBackupCode = false;
 
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
         algorithm: 'SHA1',
         digits: 6,
         period: 30,
-        secret: OTPAuth.Secret.fromBase32(admin.mfaSecret),
+        secret: OTPAuth.Secret.fromBase32(plainSecret),
       });
 
       const delta = totp.validate({ token: code, window: 1 });

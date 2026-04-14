@@ -53,22 +53,22 @@ const statusBadgeStyle = (status: string): React.CSSProperties => {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.375rem',
-    padding: '0.25rem 0.75rem',
-    borderRadius: '999px',
-    fontSize: '0.75rem',
-    fontWeight: 600,
+    padding: '0.15rem 0.5rem',
+    borderRadius: '0px',
+    fontSize: '0.7rem',
+    fontWeight: 700,
   };
   switch (status) {
     case 'DELIVERED':
-      return { ...base, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--primary)' };
+      return { ...base, backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-main)', border: '1px solid var(--border)' };
     case 'SENT':
     case 'PENDING':
     case 'RETRY_PENDING':
-      return { ...base, backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' };
+      return { ...base, backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid transparent' };
     case 'FAILED':
-      return { ...base, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' };
+      return { ...base, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid transparent' };
     default:
-      return { ...base, backgroundColor: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8' };
+      return { ...base, backgroundColor: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: '1px solid transparent' };
   }
 };
 
@@ -221,11 +221,11 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
 
       {/* 테이블 */}
       <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid var(--border-strong)' }}>
+          <thead style={{ backgroundColor: 'var(--border)' }}>
+            <tr style={{ color: 'var(--text-main)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
               {summary.failed > 0 && (
-                <th style={{ padding: '1.25rem 0.75rem', fontWeight: 600, width: '40px' }}>
+                <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, width: '40px', border: '1px solid var(--border-strong)' }}>
                   <input
                     type="checkbox"
                     checked={selectedIds.size === failedLogIds.size && failedLogIds.size > 0}
@@ -235,19 +235,19 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
                   />
                 </th>
               )}
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>수신번호</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>상태</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>통신사</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>재시도 횟수</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600 }}>발송시간</th>
-              <th style={{ padding: '1.25rem', fontWeight: 600, textAlign: 'right' }}>비용</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>수신번호</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>상태</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>통신사</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>재시도 횟수</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>발송시간</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, textAlign: 'right', border: '1px solid var(--border-strong)' }}>비용</th>
             </tr>
           </thead>
           <tbody>
             {filteredLogs.map((log) => (
-              <tr key={log.id} style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr key={log.id} style={{ backgroundColor: 'transparent', transition: 'background-color 0.1s' }} onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')} onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
                 {summary.failed > 0 && (
-                  <td style={{ padding: '1.25rem 0.75rem' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)', textAlign: 'center' }}>
                     {log.status === 'FAILED' ? (
                       <input
                         type="checkbox"
@@ -260,17 +260,17 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
                     )}
                   </td>
                 )}
-                <td style={{ padding: '1.25rem', fontSize: '0.875rem', fontWeight: 500 }}>{log.targetNumber}</td>
-                <td style={{ padding: '1.25rem' }}>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', fontWeight: 500, border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>{log.targetNumber}</td>
+                <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)' }}>
                   <div style={statusBadgeStyle(log.status)}>
-                    {log.status === 'DELIVERED' ? <CheckCircle size={12} /> : log.status === 'FAILED' ? <XCircle size={12} /> : <Clock size={12} />}
+                    {log.status === 'DELIVERED' ? <CheckCircle size={10} /> : log.status === 'FAILED' ? <XCircle size={10} /> : <Clock size={10} />}
                     {logStatusLabel[log.status] || log.status}
                   </div>
                 </td>
-                <td style={{ padding: '1.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.networkName || log.providerStatus || '-'}</td>
-                <td style={{ padding: '1.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.retryCount}</td>
-                <td style={{ padding: '1.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{formatDateTime(log.createdAt)}</td>
-                <td style={{ padding: '1.25rem', fontSize: '0.875rem', fontWeight: 600, textAlign: 'right' }}>${log.cost.toFixed(2)}</td>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.networkName || log.providerStatus || '-'}</td>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.retryCount}</td>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(log.createdAt)}</td>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${log.cost.toFixed(2)}</td>
               </tr>
             ))}
             {filteredLogs.length === 0 && (

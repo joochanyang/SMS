@@ -30,8 +30,7 @@ services:
     ports:
       - "0.0.0.0:3301:3001"
     env_file: .env
-    environment:
-      - FORCE_SECURE_COOKIE=false
+    # FORCE_SECURE_COOKIE 제거됨 — HTTPS 환경에서 secure=true 자동 적용
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

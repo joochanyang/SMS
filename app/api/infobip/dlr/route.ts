@@ -11,7 +11,7 @@ function safeCompare(a: string, b: string): boolean {
 
 /**
  * Infobip Delivery Reports webhook (best effort).
- * 보안: INFOBIP_DLR_SECRET 설정 시 `?token=` 또는 `x-infobip-token` 헤더로 검증.
+ * 보안: INFOBIP_DLR_SECRET 설정 시 `x-infobip-token` 헤더로 검증.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -25,8 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "웹훅이 설정되지 않았습니다." }, { status: 503 });
     }
 
-    const url = new URL(req.url);
-    const token = url.searchParams.get("token") || req.headers.get("x-infobip-token");
+    const token = req.headers.get("x-infobip-token");
     if (!token || !safeCompare(token, secret)) {
       return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
     }

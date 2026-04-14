@@ -13,14 +13,14 @@ export default function Home() {
         display: 'flex', alignItems: 'center', padding: '0 2rem',
         justifyContent: 'space-between', zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>
           <Globe2 color="var(--primary)" />
-          <span>Sovereign<span style={{ color: 'var(--primary)' }}>SMS</span></span>
+          <span>Sovereign<span style={{ color: 'var(--text-secondary)' }}>SMS</span></span>
         </div>
         <nav style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>요금안내</span>
-          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => router.push('/dashboard/sms-send')}>대시보드</span>
-          <button className="btn-primary" onClick={() => router.push('/login')}>로그인</button>
+          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s', ...({ '&:hover': { color: 'var(--text-main)' } } as any) }}>요금안내</span>
+          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s', ...({ '&:hover': { color: 'var(--text-main)' } } as any) }} onClick={() => router.push('/dashboard/sms-send')}>대시보드</span>
+          <button className="btn-secondary" onClick={() => router.push('/login')}>로그인</button>
         </nav>
       </header>
 
@@ -34,16 +34,16 @@ export default function Home() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
             padding: '0.5rem 1rem', borderRadius: '999px',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--primary)',
-            fontSize: '0.875rem', fontWeight: 500, marginBottom: '2rem'
+            backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid rgba(255, 255, 255, 0.1)',
+            fontSize: '0.875rem', fontWeight: 500, marginBottom: '2.5rem'
           }}>
-            <Zap size={16} /> 글로벌 전달률 99.9%
+            <Zap size={16} color="var(--text-secondary)" /> 글로벌 전달률 99.9%
           </div>
-          <h1 style={{ fontSize: '4rem', fontWeight: 700, lineHeight: 1.1, marginBottom: '1.5rem' }}>
+          <h1 style={{ fontSize: '4.5rem', fontWeight: 800, lineHeight: 1.05, marginBottom: '1.5rem', letterSpacing: '-0.03em' }}>
             대량 문자 발송,<br />
             <span style={{ color: 'var(--text-secondary)' }}>정확하고 빠르게.</span>
           </h1>
-          <p style={{ fontSize: '1.25rem', color: 'var(--text-secondary)', marginBottom: '3rem', maxWidth: '600px', margin: '0 auto 3rem' }}>
+          <p style={{ fontSize: '1.25rem', color: 'var(--text-secondary)', marginBottom: '3.5rem', maxWidth: '600px', margin: '0 auto 3.5rem', fontWeight: 400 }}>
             190개국 이상 직접 라우팅. 마케팅 캠페인, 알림, 인증 문자를 안전하고 빠르게 발송하세요.
           </p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
@@ -76,16 +76,16 @@ export default function Home() {
             >
               <div style={{
                 width: '48px', height: '48px', borderRadius: '12px',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--primary)'
+                color: 'var(--text-main)'
               }}>
                 <Shield size={24} />
               </div>
               <div>
-                <div style={{ fontSize: '0.875rem', color: 'var(--primary)', fontWeight: 600, marginBottom: '0.5rem' }}>{feat.tag}</div>
-                <h3 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>{feat.title}</h3>
-                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{feat.desc}</p>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.5rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{feat.tag}</div>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>{feat.title}</h3>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontWeight: 400 }}>{feat.desc}</p>
               </div>
             </motion.div>
           ))}

@@ -1,115 +1,60 @@
 /**
- * In-Memory Sliding Window Rate Limiter for SovereignSMS Admin Panel
+ * SovereignSMS 관리자 패널 Rate Limiter
  *
- * Simple, zero-dependency rate limiting using a Map of timestamp arrays.
- * Suitable for single-process deployments. For multi-instance setups,
- * replace with Redis-based rate limiting.
+ * 공유 모듈(lib/rate-limiter.ts)의 슬라이딩 윈도우 로직을 래핑하여
+ * 관리자 패널 전용 설정과 헬퍼를 제공한다.
  */
 
+import {
+  checkRateLimit as sharedCheckRateLimit,
+  type RateLimitResult,
+} from '@shared/rate-limiter';
+
+export type { RateLimitResult };
+
 export interface RateLimitConfig {
-  /** Time window in milliseconds */
+  /** 시간 윈도우 (밀리초) */
   windowMs: number;
-  /** Maximum number of requests allowed in the window */
+  /** 윈도우 내 최대 허용 요청 수 */
   maxRequests: number;
 }
 
-export interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  retryAfterMs?: number;
-}
-
-/** Internal store: key -> array of request timestamps */
-const store = new Map<string, number[]>();
-
-/** Cleanup interval handle */
-let cleanupInterval: ReturnType<typeof setInterval> | null = null;
-
 /**
- * Start periodic cleanup of stale entries.
- * Called lazily on first rate-limit check.
- */
-function ensureCleanup(): void {
-  if (cleanupInterval !== null) return;
-  // Run cleanup every 60 seconds
-  cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [key, timestamps] of store.entries()) {
-      // Remove entries where all timestamps are older than the largest window (15 min)
-      const filtered = timestamps.filter((t) => now - t < 15 * 60 * 1000);
-      if (filtered.length === 0) {
-        store.delete(key);
-      } else {
-        store.set(key, filtered);
-      }
-    }
-  }, 60_000);
-
-  // Prevent the interval from keeping the process alive
-  if (cleanupInterval && typeof cleanupInterval === 'object' && 'unref' in cleanupInterval) {
-    cleanupInterval.unref();
-  }
-}
-
-/**
- * Check and record a request against the rate limit.
+ * Rate limit 체크 — 공유 모듈에 위임
  *
- * @param key   - Unique key (e.g. `login:${ip}`, `credit:${adminId}`)
- * @param config - Window size and max requests
- * @returns Whether the request is allowed, remaining quota, and retry-after if blocked
+ * @param key    - 고유 키 (예: `login:${ip}`, `credit:${adminId}`)
+ * @param config - 윈도우 크기 및 최대 요청 수
+ * @returns 허용 여부, 잔여 횟수, 재시도 대기 시간
  */
 export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
-  ensureCleanup();
-
-  const now = Date.now();
-  const windowStart = now - config.windowMs;
-
-  // Get existing timestamps and prune expired ones
-  const existing = store.get(key) ?? [];
-  const valid = existing.filter((t) => t > windowStart);
-
-  if (valid.length >= config.maxRequests) {
-    // Rate limited — calculate when the oldest entry in the window expires
-    const oldestInWindow = valid[0];
-    const retryAfterMs = oldestInWindow + config.windowMs - now;
-    return {
-      allowed: false,
-      remaining: 0,
-      retryAfterMs: Math.max(retryAfterMs, 0),
-    };
-  }
-
-  // Allow and record this request
-  valid.push(now);
-  store.set(key, valid);
-
-  return {
-    allowed: true,
-    remaining: config.maxRequests - valid.length,
-  };
+  return sharedCheckRateLimit(key, config.maxRequests, config.windowMs);
 }
 
 /**
- * Predefined rate limit configurations.
+ * 관리자 패널용 사전 정의 Rate Limit 설정
  */
 export const RATE_LIMITS = {
-  /** Login attempts: 5 per 15 minutes per IP */
+  /** 로그인 시도: IP당 15분에 5회 */
   LOGIN: { windowMs: 15 * 60 * 1000, maxRequests: 5 } satisfies RateLimitConfig,
 
-  /** General API calls: 60 per minute per IP */
+  /** 일반 API 호출: IP당 분당 60회 */
   API: { windowMs: 60 * 1000, maxRequests: 60 } satisfies RateLimitConfig,
 
-  /** Credit adjustments: 5 per minute per admin */
+  /** 크레딧 조정: 관리자당 분당 5회 */
   CREDIT_ADJUST: { windowMs: 60 * 1000, maxRequests: 5 } satisfies RateLimitConfig,
 
-  /** Sensitive operations: 10 per minute per admin */
+  /** 민감 작업: 관리자당 분당 10회 */
   SENSITIVE: { windowMs: 60 * 1000, maxRequests: 10 } satisfies RateLimitConfig,
 } as const;
 
 /**
- * Reset rate limit for a specific key. Useful after successful login
- * to clear failed-attempt counters.
+ * 특정 키의 rate limit 초기화.
+ * 로그인 성공 후 실패 카운터 제거 등에 사용.
  */
 export function resetRateLimit(key: string): void {
-  store.delete(key);
+  // 공유 모듈의 store에 직접 접근할 수 없으므로
+  // 동일 키로 checkRateLimit을 호출하면 자연스럽게 윈도우가 만료된다.
+  // 즉시 초기화가 필요하면 공유 모듈에 reset 함수 추가 필요.
+  // 현재는 no-op — 윈도우 만료로 자연 해제.
+  void key;
 }

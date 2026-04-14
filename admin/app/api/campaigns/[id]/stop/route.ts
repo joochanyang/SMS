@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     const campaign = await prisma.smsCampaign.findUnique({
       where: { id },
-      select: { id: true, status: true, userId: true, name: true, totalRecipients: true, deliveredCount: true },
+      select: { id: true, status: true, userId: true, name: true, totalRecipients: true, deliveredCount: true, costPerMessage: true },
     });
 
     if (!campaign) {
@@ -65,16 +65,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       );
     }
 
-    // Stop the campaign
-    const updated = await prisma.$transaction(async (tx) => {
-      // Update campaign status
-      const updatedCampaign = await tx.smsCampaign.update({
-        where: { id },
-        data: { status: 'CANCELLED' },
-      });
-
+    // Stop the campaign + refund unprocessed messages
+    const result = await prisma.$transaction(async (tx) => {
       // Cancel pending SMS logs
-      await tx.smsLog.updateMany({
+      const cancelResult = await tx.smsLog.updateMany({
         where: {
           campaignId: id,
           status: { in: ['PENDING', 'RETRY_PENDING'] },
@@ -82,7 +76,46 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         data: { status: 'FAILED', providerError: '관리자에 의한 캠페인 중지' },
       });
 
-      return updatedCampaign;
+      const unprocessedCount = cancelResult.count;
+      const refundAmount = unprocessedCount * Number(campaign.costPerMessage);
+
+      // 미처리 건 크레딧 환불
+      if (refundAmount > 0) {
+        const updatedUser = await tx.user.update({
+          where: { id: campaign.userId },
+          data: { credits: { increment: refundAmount } },
+        });
+
+        await tx.creditLedger.create({
+          data: {
+            userId: campaign.userId,
+            type: 'REFUND',
+            amount: refundAmount,
+            balanceAfter: updatedUser.credits,
+            description: `관리자 캠페인 중지 환불 (${unprocessedCount}건)`,
+            adminId: admin.id,
+            referenceType: 'CAMPAIGN',
+            referenceId: id,
+          },
+        });
+
+        await tx.transaction.create({
+          data: {
+            userId: campaign.userId,
+            amount: refundAmount,
+            type: 'DEPOSIT',
+            description: `[관리자 중지 환불] ${campaign.name ?? campaign.id}`,
+          },
+        });
+      }
+
+      // Update campaign status
+      const updatedCampaign = await tx.smsCampaign.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+      });
+
+      return { campaign: updatedCampaign, unprocessedCount, refundAmount };
     });
 
     await logAdminAction(admin, 'CAMPAIGN_STOP', 'SmsCampaign', id, reason, req, {
@@ -92,16 +125,25 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         userId: campaign.userId,
         totalRecipients: campaign.totalRecipients,
         deliveredBeforeStop: campaign.deliveredCount,
+        refundedCount: result.unprocessedCount,
+        refundAmount: result.refundAmount,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: '캠페인이 중지되었습니다.',
+      message: result.refundAmount > 0
+        ? `캠페인이 중지되었습니다. ${result.unprocessedCount}건 환불 처리됨.`
+        : '캠페인이 중지되었습니다.',
       campaign: {
-        id: updated.id,
-        status: updated.status,
+        id: result.campaign.id,
+        status: result.campaign.status,
       },
+      ...(result.refundAmount > 0 && {
+        refunded: true,
+        refundAmount: result.refundAmount,
+        refundedCount: result.unprocessedCount,
+      }),
     });
   } catch (err) {
     return handleError(err);

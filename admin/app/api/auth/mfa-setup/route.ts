@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { generateBackupCodes, hashPassword } from '@/lib/admin-auth';
 import { requireAuth, getClientIp, getClientUserAgent } from '@/lib/admin-session';
 import { AuthError } from '@/lib/admin-session';
+import { encryptMfaSecret, decryptMfaSecret } from '@/lib/mfa-crypto';
 
 // ---------------------------------------------------------------------------
 // GET /api/auth/mfa-setup — Generate TOTP secret + otpauth URI
@@ -41,10 +42,10 @@ export async function GET(request: NextRequest) {
     const uri = totp.toString();
 
     // Store the secret temporarily in mfaSecret (not yet enabled)
-    // Encrypt with a simple approach: base32 encoding is already in the secret
+    // AES-256-GCM 암호화 적용
     await prisma.adminUser.update({
       where: { id: admin.id },
-      data: { mfaSecret: secret.base32 },
+      data: { mfaSecret: encryptMfaSecret(secret.base32) },
     });
 
     return NextResponse.json({
@@ -98,14 +99,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify TOTP code
+    // Verify TOTP code — 복호화 후 검증
+    const plainSecret = decryptMfaSecret(adminUser.mfaSecret);
     const totp = new OTPAuth.TOTP({
       issuer: 'SovereignSMS Admin',
       label: admin.username,
       algorithm: 'SHA1',
       digits: 6,
       period: 30,
-      secret: OTPAuth.Secret.fromBase32(adminUser.mfaSecret),
+      secret: OTPAuth.Secret.fromBase32(plainSecret),
     });
 
     const delta = totp.validate({ token: code, window: 1 });
