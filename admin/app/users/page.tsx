@@ -77,7 +77,7 @@ export default function UsersPage() {
       if (usersRes.ok) {
         const data = await usersRes.json();
         setUsers(data.users ?? []);
-        setTotalPages(data.totalPages ?? 1);
+        setTotalPages(data.totalPages ?? (Math.ceil((data.total ?? 0) / 20) || 1));
       }
     } catch {
       router.push('/login');

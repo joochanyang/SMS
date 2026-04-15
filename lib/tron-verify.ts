@@ -178,7 +178,17 @@ export async function verifyTRC20Transaction(
   expectedAmount: number,
   tolerance: number = 0.01,
 ): Promise<TxVerificationResult> {
-  const cleanTxid = txid.trim().toLowerCase().replace(/^0x/, '');
+  const cleanTxid = txid.trim().replace(/^0x/i, '').toLowerCase();
+
+  // TXID 형식 검증 (64자 hex)
+  if (!/^[0-9a-f]{64}$/.test(cleanTxid)) {
+    return {
+      valid: false,
+      txid: cleanTxid,
+      status: 'FAILED',
+      error: '유효하지 않은 TXID 형식입니다. 64자리 16진수여야 합니다.',
+    };
+  }
 
   // 1. 트랜잭션 기본 정보 조회
   const txInfo = await getTransactionInfo(cleanTxid);
@@ -220,9 +230,9 @@ export async function verifyTRC20Transaction(
     };
   }
 
-  // 4. To Address 확인
-  const toAddr = transfer.to.toLowerCase();
-  const expected = expectedAddress.toLowerCase();
+  // 4. To Address 확인 (Tron Base58 주소는 대소문자 구분)
+  const toAddr = transfer.to.trim();
+  const expected = expectedAddress.trim();
   if (toAddr !== expected) {
     return {
       valid: false,
@@ -235,8 +245,8 @@ export async function verifyTRC20Transaction(
   }
 
   // 5. Asset 확인 (USDT인지)
-  const isUsdt = transfer.token_info.symbol === 'USDT' || 
-                 transfer.token_info.address.toLowerCase() === USDT_CONTRACT.toLowerCase();
+  const isUsdt = transfer.token_info.symbol === 'USDT' ||
+                 transfer.token_info.address === USDT_CONTRACT;
   if (!isUsdt) {
     return {
       valid: false,

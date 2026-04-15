@@ -87,3 +87,23 @@ export function checkRateLimit(
     remaining: maxRequests - record.timestamps.length,
   };
 }
+
+/**
+ * 특정 키의 rate limit 기록을 즉시 초기화
+ * 로그인 성공 후 실패 카운터 제거 등에 사용
+ */
+export function resetRateLimit(key: string): void {
+  store.delete(key);
+}
+
+/**
+ * 특정 prefix로 시작하는 모든 키 초기화
+ * 예: resetRateLimitByPrefix('login:192.168.1.1') → 해당 IP의 모든 rate limit 초기화
+ */
+export function resetRateLimitByPrefix(prefix: string): void {
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) {
+      store.delete(key);
+    }
+  }
+}

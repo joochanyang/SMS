@@ -216,7 +216,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         logs={serializedLogs}
         summary={summary}
         campaignId={campaign.id}
-        campaignStatus={campaign.status}
       />
     </div>
   );

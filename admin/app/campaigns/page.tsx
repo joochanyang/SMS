@@ -88,7 +88,7 @@ export default function CampaignsPage() {
       if (campRes.ok) {
         const data = await campRes.json();
         setCampaigns(data.campaigns ?? []);
-        setTotalPages(data.totalPages ?? 1);
+        setTotalPages(data.totalPages ?? (Math.ceil((data.total ?? 0) / 20) || 1));
       }
     } catch {
       router.push('/login');

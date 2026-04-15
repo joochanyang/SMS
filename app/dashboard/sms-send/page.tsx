@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
-import { RefreshCw, Bookmark, Type, RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, Shuffle } from 'lucide-react';
+import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, Shuffle, BookUser } from 'lucide-react';
+
+type RecipientWithVars = { phone: string; name?: string; nickname?: string };
 
 const DEFAULT_BATCH_SIZE = 200;
 
@@ -60,6 +63,13 @@ type CampaignProgress = {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function SmsSendPage() {
+  const searchParams = useSearchParams();
+
+  // 주소록 모드
+  const [addressBookMode, setAddressBookMode] = useState(false);
+  const [addressBookName, setAddressBookName] = useState('');
+  const [recipientsWithVars, setRecipientsWithVars] = useState<RecipientWithVars[]>([]);
+
   // Logic states
   const [message, setMessage] = useState('');
   const [recipients, setRecipients] = useState('');
@@ -71,7 +81,6 @@ export default function SmsSendPage() {
   
   const [senderId, setSenderId] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -111,6 +120,23 @@ export default function SmsSendPage() {
       })
       .catch(() => {});
     fetchRecentCampaigns();
+
+    // 주소록 모드: URL에 addressBookId가 있으면 연락처 로드
+    const abId = searchParams.get('addressBookId');
+    if (abId) {
+      fetch(`/api/address-book/${abId}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.contacts?.length) {
+            setAddressBookMode(true);
+            setAddressBookName(data.name);
+            setRecipientsWithVars(data.contacts);
+            setRecipients(data.contacts.map((c: RecipientWithVars) => c.phone).join('\n'));
+            setActiveTab('manual');
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const smsInfo = useMemo(() => getSmsInfo(message), [message]);
@@ -162,7 +188,6 @@ export default function SmsSendPage() {
         }
         setRecipients(values.join('\n'));
         setCsvFilename(file.name);
-        setStatusMessage(`CSV 파싱 완료: ${values.length}개 항목 로드됨`);
       },
       error: () => setStatusError('CSV 파싱 실패. 파일 형식을 확인하세요.'),
     });
@@ -212,7 +237,7 @@ export default function SmsSendPage() {
   };
 
   const handleSendClick = () => {
-    setStatusMessage(null);
+
     setStatusError(null);
 
     if (!message.trim()) {
@@ -238,7 +263,7 @@ export default function SmsSendPage() {
 
   const handleSend = async () => {
     setShowConfirmModal(false);
-    setStatusMessage(null);
+
     setStatusError(null);
     setProgress(null);
     setCompletedCampaign(null);
@@ -251,7 +276,9 @@ export default function SmsSendPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipients: validRecipients,
+          ...(addressBookMode
+            ? { recipientsWithVars: recipientsWithVars.filter((r) => validRecipients.includes(r.phone)) }
+            : { recipients: validRecipients }),
           message,
           ...(senderId.trim() && { senderId: senderId.trim() }),
         }),
@@ -264,7 +291,7 @@ export default function SmsSendPage() {
 
       const campaignId = createData.campaignId as string;
       activeCampaignIdRef.current = campaignId;
-      setStatusMessage(`캠페인 생성 완료. 자동 발송을 시작합니다. (ID: ${campaignId})`);
+      // 전송 중 모달에서 진행 상태를 표시하므로 별도 상태 메시지 불필요
       const finalCampaign = await processCampaignLoop(campaignId);
 
       setCompletedCampaign({
@@ -276,7 +303,7 @@ export default function SmsSendPage() {
         deliveredCount: finalCampaign.deliveredCount,
       });
       setProgress(null);
-      setStatusMessage(null);
+  
 
       // 발송 후 최근 캠페인 목록 갱신
       fetchRecentCampaigns();
@@ -284,9 +311,7 @@ export default function SmsSendPage() {
       // 발송 후 크레딧 잔액 갱신
       setCreditBalance((prev) => Math.max(0, prev - estimatedTotalCost));
 
-      if (finalCampaign.failedCount > 0) {
-        setStatusError('일부 건이 실패했습니다. 히스토리에서 상세 내역을 확인하세요.');
-      }
+      // 실패 메시지는 완료 모달 안에서 표시됨
     } catch (e: unknown) {
       setStatusError(e instanceof Error ? e.message : '서버 통신 중 오류가 발생했습니다.');
     } finally {
@@ -405,10 +430,21 @@ export default function SmsSendPage() {
               </span>
             </div>
 
+            {/* 주소록 모드 안내 */}
+            {addressBookMode && (
+              <div style={{
+                padding: '0.5rem 1rem', backgroundColor: '#EEF2FF', borderBottom: '1px solid #C7D2FE',
+                display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#4F46E5', fontWeight: 600,
+              }}>
+                <BookUser size={14} /> 주소록: {addressBookName} ({recipientsWithVars.length}명)
+                <span style={{ color: '#6B7280', fontWeight: 400 }}>| {'{이름}'}, {'{별명}'} 입력 시 자동 치환</span>
+              </div>
+            )}
+
             {/* Main Text Area */}
             <div style={{ position: 'relative', height: '280px' }}>
               <textarea
-                placeholder="문자 메시지 - SMS"
+                placeholder={addressBookMode ? "메시지를 입력하세요. {이름}, {별명} 변수를 사용할 수 있습니다." : "문자 메시지 - SMS"}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 disabled={isSending}
@@ -431,31 +467,7 @@ export default function SmsSendPage() {
               </button>
             </div>
 
-            {/* Tool buttons */}
-            <div style={{ 
-              display: 'flex', borderTop: '1px solid #F3F4F6', borderBottom: '1px solid #F3F4F6',
-              padding: '0.5rem'
-            }}>
-              <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.5rem', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#4B5563', fontWeight: 500 }}>
-                <RefreshCw size={14} /> 변수
-              </button>
-              <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.5rem', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#4B5563', fontWeight: 500 }}>
-                <Bookmark size={14} /> 문구
-              </button>
-              <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.5rem', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#4B5563', fontWeight: 500 }}>
-                <Type size={14} /> 특수
-              </button>
-            </div>
-
-            {/* Schedule Toggle */}
-            <div style={{ display: 'flex', padding: '0.75rem', gap: '0.5rem' }}>
-              <button style={{ flex: 1, padding: '0.65rem', borderRadius: '6px', border: '1px solid #4F46E5', backgroundColor: '#FFFFFF', color: '#4F46E5', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', cursor: 'pointer' }}>
-                <span style={{ color: '#4F46E5' }}>✓</span> 즉시
-              </button>
-              <button style={{ flex: 1, padding: '0.65rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#374151', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
-                예약
-              </button>
-            </div>
+            <div style={{ borderTop: '1px solid #F3F4F6' }} />
 
             {/* Send Button */}
             <button 
@@ -476,11 +488,6 @@ export default function SmsSendPage() {
           {statusError && (
              <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#EF4444', fontSize: '0.8rem', fontWeight: 600 }}>
                {statusError}
-             </div>
-          )}
-          {statusMessage && (
-             <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', color: '#10B981', fontSize: '0.8rem', fontWeight: 600 }}>
-               {statusMessage}
              </div>
           )}
         </div>
@@ -539,17 +546,16 @@ export default function SmsSendPage() {
             overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '400px'
           }}>
             {/* Table Header */}
-            <div style={{ 
-              display: 'grid', gridTemplateColumns: '50px 200px 150px 1fr 1fr 1fr', 
+            <div style={{
+              display: 'grid', gridTemplateColumns: '50px 200px 1fr 1fr 1fr',
               padding: '1rem', borderBottom: '1px solid #E5E7EB', backgroundColor: '#FAFAFA',
               fontSize: '0.85rem', fontWeight: 700, color: '#374151'
             }}>
               <div>No</div>
               <div>연락처</div>
-              <div>변수1</div>
-              <div>변수2</div>
-              <div>변수3</div>
-              <div>비고</div>
+              <div>이름</div>
+              <div>별명</div>
+              <div>미리보기</div>
             </div>
 
             {/* Empty State or Rows */}
@@ -559,20 +565,23 @@ export default function SmsSendPage() {
                </div>
             ) : (
                <div style={{ flex: 1, overflowY: 'auto', maxHeight: '500px' }}>
-                 {validRecipients.slice(0, 50).map((num, i) => (
-                   <div key={i} style={{ 
-                     display: 'grid', gridTemplateColumns: '50px 200px 150px 1fr 1fr 1fr', 
+                 {validRecipients.slice(0, 50).map((num, i) => {
+                   const vars = addressBookMode ? recipientsWithVars.find((r) => r.phone === num) : null;
+                   const preview = vars && message ? message.replace(/\{이름\}/g, vars.name || '').replace(/\{별명\}/g, vars.nickname || '') : '';
+                   return (
+                   <div key={i} style={{
+                     display: 'grid', gridTemplateColumns: '50px 200px 1fr 1fr 1fr',
                      padding: '0.75rem 1rem', borderBottom: '1px solid #F3F4F6',
                      fontSize: '0.85rem', color: '#111827'
                    }}>
                      <div style={{ color: '#6B7280' }}>{i + 1}</div>
                      <div style={{ fontWeight: 600 }}>{num}</div>
-                     <div>-</div>
-                     <div>-</div>
-                     <div>-</div>
-                     <div></div>
+                     <div>{vars?.name || '-'}</div>
+                     <div>{vars?.nickname || '-'}</div>
+                     <div style={{ color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview || '-'}</div>
                    </div>
-                 ))}
+                   );
+                 })}
                  {validRecipients.length > 50 && (
                    <div style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.85rem' }}>
                      ... 그 외 {validRecipients.length - 50}개 대기 중
@@ -599,30 +608,63 @@ export default function SmsSendPage() {
         </div>
       </div>
 
-      {/* Progress Cards etc */}
-      {(progress || completedCampaign) && (
-         <div style={{ padding: '1.5rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-           <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>발송 진행 상태</h3>
-           {progress && (
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-               <div style={{ width: '100%', height: '8px', backgroundColor: '#E5E7EB', borderRadius: '4px', overflow: 'hidden' }}>
-                 <div style={{ width: `${Math.round((progress.processedCount / progress.totalRecipients) * 100)}%`, height: '100%', backgroundColor: '#4F46E5', transition: 'width 0.3s' }} />
-               </div>
-               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', fontWeight: 600 }}>
-                 <span style={{ color: '#4F46E5' }}>진행률: {Math.round((progress.processedCount / progress.totalRecipients) * 100)}%</span>
-                 <span>처리: {progress.processedCount}/{progress.totalRecipients}</span>
-                 <span style={{ color: '#10B981' }}>성공: {progress.deliveredCount}</span>
-                 <span style={{ color: '#EF4444' }}>실패: {progress.failedCount}</span>
-               </div>
-             </div>
-           )}
-           {completedCampaign && (
-             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.9rem', fontWeight: 600 }}>
-               {completedCampaign.status === 'COMPLETED' ? <CheckCircle2 color="#10B981" /> : <XCircle color="#EF4444" />}
-               <span>최근 캠페인이 종료되었습니다. 성공: {completedCampaign.deliveredCount}건 / 실패: {completedCampaign.failedCount}건</span>
-             </div>
-           )}
-         </div>
+      {/* 전송 중 모달 */}
+      {isSending && progress && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '16px', maxWidth: '480px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+            <Loader2 size={48} color="#4F46E5" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' }} />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', marginBottom: '0.5rem' }}>전송 중...</h3>
+            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>메시지를 발송하고 있습니다. 잠시만 기다려주세요.</p>
+            <div style={{ width: '100%', height: '10px', backgroundColor: '#E5E7EB', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem' }}>
+              <div style={{ width: `${Math.round((progress.processedCount / progress.totalRecipients) * 100)}%`, height: '100%', backgroundColor: '#4F46E5', borderRadius: '5px', transition: 'width 0.3s' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', fontSize: '0.85rem', fontWeight: 600 }}>
+              <span style={{ color: '#4F46E5' }}>{Math.round((progress.processedCount / progress.totalRecipients) * 100)}%</span>
+              <span style={{ color: '#374151' }}>{progress.processedCount} / {progress.totalRecipients}건</span>
+              <span style={{ color: '#10B981' }}>성공 {progress.deliveredCount}</span>
+              <span style={{ color: '#EF4444' }}>실패 {progress.failedCount}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 전송 완료 모달 */}
+      {completedCampaign && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ backgroundColor: '#FFFFFF', padding: '2.5rem', borderRadius: '16px', maxWidth: '480px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+            {completedCampaign.status === 'COMPLETED' ? (
+              <CheckCircle2 size={56} color="#10B981" style={{ margin: '0 auto 1rem' }} />
+            ) : (
+              <XCircle size={56} color="#EF4444" style={{ margin: '0 auto 1rem' }} />
+            )}
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', marginBottom: '0.75rem' }}>
+              {completedCampaign.status === 'COMPLETED' ? '전송 완료' : '전송 종료'}
+            </h3>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', fontSize: '0.95rem', fontWeight: 600, marginBottom: '1.5rem' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: '#6B7280', fontSize: '0.8rem', marginBottom: '0.25rem' }}>총 건수</div>
+                <div style={{ color: '#111827' }}>{completedCampaign.totalRecipients}건</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: '#6B7280', fontSize: '0.8rem', marginBottom: '0.25rem' }}>성공</div>
+                <div style={{ color: '#10B981' }}>{completedCampaign.deliveredCount}건</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: '#6B7280', fontSize: '0.8rem', marginBottom: '0.25rem' }}>실패</div>
+                <div style={{ color: '#EF4444' }}>{completedCampaign.failedCount}건</div>
+              </div>
+            </div>
+            {completedCampaign.failedCount > 0 && (
+              <p style={{ color: '#EF4444', fontSize: '0.85rem', marginBottom: '1rem' }}>일부 건이 실패했습니다. 히스토리에서 상세 내역을 확인하세요.</p>
+            )}
+            <button
+              onClick={() => setCompletedCampaign(null)}
+              style={{ padding: '0.75rem 2.5rem', borderRadius: '8px', border: 'none', background: '#4F46E5', color: '#FFFFFF', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}
+            >
+              확인
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Bottom Area: Recent Messages */}

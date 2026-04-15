@@ -10,13 +10,21 @@ import {
   getBlacklistedNumbers,
 } from "@/lib/sms-policy";
 import { generateSenderId, isValidSenderId } from "@/lib/sender-id";
+import { substituteVars } from "@/lib/variable-substitution";
 import { withRateLimit } from "@/lib/api-rate-limit";
+
+type RecipientWithVars = {
+  phone: string;
+  name?: string;
+  nickname?: string;
+};
 
 type CreateCampaignBody = {
   name?: string;
   senderId?: string;
   message: string;
   recipients: string[];
+  recipientsWithVars?: RecipientWithVars[];
   scheduledAt?: string;
 };
 
@@ -42,7 +50,24 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json()) as CreateCampaignBody;
     const message = body.message?.trim();
-    const recipients = normalizeRecipients(body.recipients ?? []);
+
+    // 치환 모드: recipientsWithVars가 있으면 주소록 발송
+    const hasVars = Array.isArray(body.recipientsWithVars) && body.recipientsWithVars.length > 0;
+    const varsMap = new Map<string, RecipientWithVars>();
+    let recipients: string[];
+
+    if (hasVars) {
+      const rawPhones = body.recipientsWithVars!.map((r) => r.phone);
+      recipients = normalizeRecipients(rawPhones);
+      // 정규화된 번호 → 변수 매핑 (원본 번호와 정규화 번호 매칭)
+      const normalizedList = normalizeRecipients(rawPhones);
+      for (let i = 0; i < rawPhones.length; i++) {
+        const norm = normalizedList[i];
+        if (norm) varsMap.set(norm, body.recipientsWithVars![i]);
+      }
+    } else {
+      recipients = normalizeRecipients(body.recipients ?? []);
+    }
 
     // 발신번호: 유저 입력값 검증 또는 자동 생성
     let senderId: string;
@@ -86,8 +111,22 @@ export async function POST(req: NextRequest) {
     }
 
     // Enforce single-SMS limit: GSM-7 = 160 chars, UCS-2 = 70 chars
+    // 치환 모드: 각 수신자별 치환 후 최대 길이 검증
+    if (hasVars) {
+      for (const [phone, vars] of varsMap.entries()) {
+        const substituted = substituteVars(message!, vars);
+        const info = getSmsSegmentInfo(substituted);
+        if (info.parts > 1) {
+          return NextResponse.json(
+            { error: `수신자 ${phone}의 치환 메시지가 ${info.charCount}자입니다. 최대 ${info.maxCharsPerSms}자까지 발송 가능합니다.` },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
     const segmentInfo = getSmsSegmentInfo(message);
-    if (segmentInfo.parts > 1) {
+    if (!hasVars && segmentInfo.parts > 1) {
       return NextResponse.json(
         {
           error: `메시지가 ${segmentInfo.charCount}자입니다. ${segmentInfo.encoding} 인코딩 기준 최대 ${segmentInfo.maxCharsPerSms}자까지만 발송 가능합니다.`,
@@ -187,7 +226,7 @@ export async function POST(req: NextRequest) {
           userId: user.id,
           campaignId: created.id,
           targetNumber: to,
-          messageBody: message,
+          messageBody: hasVars && varsMap.has(to) ? substituteVars(message, varsMap.get(to)!) : message,
           status: "PENDING",
           cost: costPerMessage,
         })),

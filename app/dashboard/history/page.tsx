@@ -14,6 +14,18 @@ function formatDateTime(date: Date) {
   }).format(date);
 }
 
+const statusLabel: Record<string, string> = {
+  PENDING: '대기',
+  SENDING: '발송중',
+  SENT: '발송완료',
+  DELIVERED: '전달완료',
+  FAILED: '실패',
+  RETRY_PENDING: '재시도대기',
+  REJECTED: '거부',
+  EXPIRED: '만료',
+  CANCELLED: '취소',
+};
+
 export default async function HistoryPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
@@ -57,7 +69,7 @@ export default async function HistoryPage() {
           </thead>
           <tbody>
             {logs.map((log) => (
-              <tr key={log.id} style={{ backgroundColor: 'transparent', transition: 'background-color 0.1s' }} onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--surface-hover)')} onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
+              <tr key={log.id} className="table-row-hover">
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', fontWeight: 500, border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>{log.targetNumber}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: '1px solid var(--border-strong)' }}>
                   {log.messageBody}
@@ -80,18 +92,24 @@ export default async function HistoryPage() {
                     border: log.status === 'DELIVERED' ? '1px solid var(--border)' : '1px solid transparent'
                   }}>
                     {log.status === 'DELIVERED' ? <CheckCircle size={10} /> : log.status === 'FAILED' ? <XCircle size={10} /> : <Clock size={10} />}
-                    {log.status}
+                    {statusLabel[log.status] || log.status}
                   </div>
                 </td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.networkName || log.providerStatus || '-'}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)', textAlign: 'center' }}>{log.retryCount}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(log.createdAt)}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${log.cost.toFixed(2)}</td>
+                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${Number(log.cost).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         
+        {logs.length === 0 && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            아직 발송 내역이 없습니다.
+          </div>
+        )}
+
         <div style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
           <span>총 {logs.length}건</span>
           <span>실시간 DLR 기반 상태 업데이트</span>

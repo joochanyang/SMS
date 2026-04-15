@@ -31,7 +31,7 @@ export default function LoginPage() {
 
   const inputStyle = {
     width: '100%',
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: '8px',
     padding: '0.75rem 1rem',

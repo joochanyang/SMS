@@ -42,7 +42,7 @@ export default function RegisterPage() {
 
   const inputStyle = {
     width: '100%',
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: '8px',
     padding: '0.75rem 1rem',
@@ -115,7 +115,7 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="4자 이상"
               required
-              minLength={4}
+              minLength={8}
               style={inputStyle}
               onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
               onBlur={(e) => e.target.style.borderColor = 'var(--border)'}

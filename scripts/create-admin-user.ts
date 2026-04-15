@@ -5,6 +5,13 @@ import { Pool } from 'pg'
 import argon2 from 'argon2'
 
 async function main() {
+  const password = process.argv[2]
+  if (!password || password.length < 8) {
+    console.error('사용법: npx tsx scripts/create-admin-user.ts <비밀번호>')
+    console.error('비밀번호는 최소 8자 이상이어야 합니다.')
+    process.exit(1)
+  }
+
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 5,
@@ -12,7 +19,7 @@ async function main() {
   const adapter = new PrismaPg(pool)
   const prisma = new PrismaClient({ adapter })
 
-  const hash = await argon2.hash('asd123', {
+  const hash = await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 65536,
     timeCost: 3,

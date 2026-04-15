@@ -117,3 +117,12 @@ input, textarea, select {
   background: var(--surface-hover);
   border-color: var(--border-strong);
 }
+
+/* 서버 컴포넌트에서 사용 가능한 테이블 행 hover */
+.table-row-hover {
+  background-color: transparent;
+  transition: background-color 0.1s;
+}
+.table-row-hover:hover {
+  background-color: var(--surface-hover);
+}

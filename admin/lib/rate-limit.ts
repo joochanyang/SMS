@@ -7,6 +7,7 @@
 
 import {
   checkRateLimit as sharedCheckRateLimit,
+  resetRateLimit as sharedResetRateLimit,
   type RateLimitResult,
 } from '@shared/rate-limiter';
 
@@ -52,9 +53,5 @@ export const RATE_LIMITS = {
  * 로그인 성공 후 실패 카운터 제거 등에 사용.
  */
 export function resetRateLimit(key: string): void {
-  // 공유 모듈의 store에 직접 접근할 수 없으므로
-  // 동일 키로 checkRateLimit을 호출하면 자연스럽게 윈도우가 만료된다.
-  // 즉시 초기화가 필요하면 공유 모듈에 reset 함수 추가 필요.
-  // 현재는 no-op — 윈도우 만료로 자연 해제.
-  void key;
+  sharedResetRateLimit(key);
 }

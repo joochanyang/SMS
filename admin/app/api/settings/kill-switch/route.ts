@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
               campaignId: campaign.id,
               status: { in: ['PENDING', 'RETRY_PENDING'] },
             },
-            data: { status: 'CANCELLED' as any },
+            data: { status: 'FAILED', providerError: '관리자 킬 스위치에 의한 중지' },
           });
 
           const refundAmount = cancelResult.count * Number(campaign.costPerMessage);

@@ -18,8 +18,8 @@ export default function Home() {
           <span>Sovereign<span style={{ color: 'var(--text-secondary)' }}>SMS</span></span>
         </div>
         <nav style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s', ...({ '&:hover': { color: 'var(--text-main)' } } as any) }}>요금안내</span>
-          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s', ...({ '&:hover': { color: 'var(--text-main)' } } as any) }} onClick={() => router.push('/dashboard/sms-send')}>대시보드</span>
+          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s' }}>요금안내</span>
+          <span style={{ color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s' }} onClick={() => router.push('/dashboard/sms-send')}>대시보드</span>
           <button className="btn-secondary" onClick={() => router.push('/login')}>로그인</button>
         </nav>
       </header>

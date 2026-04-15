@@ -55,7 +55,7 @@ export default function UsdtDepositClient() {
   const currentPrice = priceData?.price || 0;
   const inputAmount = parseFloat(usdtAmount) || 0;
   const estimatedKrw = Math.round(inputAmount * currentPrice);
-  const estimatedUsd = Math.round((estimatedKrw / 1380) * 100) / 100;
+
 
   // 타이머
   useEffect(() => {
@@ -295,11 +295,11 @@ export default function UsdtDepositClient() {
               step="any"
               style={{
                 width: '100%',
-                backgroundColor: '#4B5563',
-                border: 'none',
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
                 padding: '1.25rem 5rem 1.25rem 1.5rem',
-                color: '#FFFFFF',
+                color: 'var(--text-main)',
                 fontSize: '1.1rem',
                 fontWeight: 500,
                 outline: 'none',
@@ -336,8 +336,8 @@ export default function UsdtDepositClient() {
                 <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>₩{estimatedKrw.toLocaleString()}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전될 크레딧</span>
-                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>${estimatedUsd.toFixed(2)} USD</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
+                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>{estimatedKrw > 0 ? Math.floor(estimatedKrw / 14).toLocaleString() : 0}건</span>
               </div>
             </div>
           )}
@@ -418,7 +418,7 @@ export default function UsdtDepositClient() {
           {/* 입금 정보 */}
           <div style={{
             padding: '1.5rem', borderRadius: '12px',
-            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backgroundColor: 'var(--surface-hover)',
             border: '1px solid var(--border)',
             marginBottom: '1.5rem',
           }}>
@@ -436,8 +436,8 @@ export default function UsdtDepositClient() {
             </div>
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전될 크레딧</span>
-              <span style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--primary)' }}>${deposit.creditAmount.toFixed(2)} USD</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
+              <span style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--primary)' }}>{deposit.krwAmount > 0 ? Math.floor(deposit.krwAmount / 14).toLocaleString() : 0}건</span>
             </div>
           </div>
 
@@ -461,7 +461,7 @@ export default function UsdtDepositClient() {
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.5rem',
               padding: '1rem',
-              backgroundColor: 'rgba(15, 23, 42, 0.8)',
+              backgroundColor: 'var(--surface)',
               border: '1px solid var(--border)',
               borderRadius: '10px',
             }}>
@@ -532,7 +532,7 @@ export default function UsdtDepositClient() {
               placeholder="트랜잭션 해시를 입력하세요 (64자리)"
               style={{
                 width: '100%',
-                backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                backgroundColor: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: '10px',
                 padding: '1rem 1.25rem',
@@ -616,7 +616,7 @@ export default function UsdtDepositClient() {
       {step === 'complete' && verifyResult?.success && verifyResult.data && (
         <div className="glass-card" style={{
           padding: '3rem 2rem', textAlign: 'center',
-          background: 'linear-gradient(135deg, rgba(9, 9, 11, 0.9) 0%, rgba(255, 255, 255, 0.1) 100%)',
+          background: 'linear-gradient(135deg, var(--primary) 0%, #818cf8 100%)',
         }}>
           <div style={{
             width: '72px', height: '72px', borderRadius: '50%', margin: '0 auto 1.5rem',
@@ -636,7 +636,7 @@ export default function UsdtDepositClient() {
 
           <div style={{
             padding: '1.5rem', borderRadius: '12px',
-            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backgroundColor: 'var(--surface-hover)',
             border: '1px solid var(--border)',
             marginBottom: '2rem', textAlign: 'left',
           }}>
@@ -645,8 +645,8 @@ export default function UsdtDepositClient() {
               <span style={{ fontWeight: 600 }}>{verifyResult.data.usdtAmount} USDT</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 금액</span>
-              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>${verifyResult.data.creditAmount.toFixed(2)} USD</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
+              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{deposit?.krwAmount ? Math.floor(deposit.krwAmount / 14).toLocaleString() : 0}건</span>
             </div>
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>

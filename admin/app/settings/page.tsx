@@ -94,7 +94,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings/kill-switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !killSwitch, reason: killReason }),
+        body: JSON.stringify({ level: killSwitch ? 'NORMAL' : 'GLOBAL_STOP', reason: killReason }),
       });
       if (res.ok) {
         setKillModal(false);

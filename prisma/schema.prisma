@@ -31,6 +31,7 @@ model User {
   templates       MessageTemplate[]
   refundRequests  RefundRequest[]
   usdtDeposits    UsdtDeposit[]
+  addressBooks    AddressBook[]
 }
 
 model SmsCampaign {
@@ -332,4 +333,29 @@ model PasswordResetToken {
 
   @@index([token])
   @@index([userId])
+}
+
+model AddressBook {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  contacts  Contact[]
+
+  @@index([userId, createdAt])
+}
+
+model Contact {
+  id             String      @id @default(cuid())
+  addressBookId  String
+  addressBook    AddressBook @relation(fields: [addressBookId], references: [id], onDelete: Cascade)
+  name           String?
+  nickname       String?
+  phone          String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([addressBookId])
 }

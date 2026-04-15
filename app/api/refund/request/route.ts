@@ -49,51 +49,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 유저 크레딧 확인
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { credits: true },
-    });
+    // 트랜잭션으로 크레딧 확인 + 중복 체크 + 생성을 원자적으로 수행
+    const refundRequest = await prisma.$transaction(async (tx) => {
+      // 유저 크레딧 확인
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { credits: true },
+      });
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "유저 정보를 찾을 수 없습니다." },
-        { status: 404 },
-      );
-    }
+      if (!user) {
+        throw Object.assign(new Error("유저 정보를 찾을 수 없습니다."), { status: 404 });
+      }
 
-    if (amount > Number(user.credits)) {
-      return NextResponse.json(
-        { error: "환불 금액이 보유 크레딧을 초과합니다." },
-        { status: 400 },
-      );
-    }
+      if (amount > Number(user.credits)) {
+        throw Object.assign(new Error("환불 금액이 보유 크레딧을 초과합니다."), { status: 400 });
+      }
 
-    // 동일 유저의 PENDING 상태 환불 요청이 이미 있는지 확인
-    const existingPending = await prisma.refundRequest.findFirst({
-      where: {
-        userId,
-        status: "PENDING",
-      },
-    });
+      // 동일 유저의 PENDING 상태 환불 요청이 이미 있는지 확인
+      const existingPending = await tx.refundRequest.findFirst({
+        where: { userId, status: "PENDING" },
+      });
 
-    if (existingPending) {
-      return NextResponse.json(
-        { error: "이미 처리 대기 중인 환불 요청이 있습니다." },
-        { status: 409 },
-      );
-    }
+      if (existingPending) {
+        throw Object.assign(new Error("이미 처리 대기 중인 환불 요청이 있습니다."), { status: 409 });
+      }
 
-    const refundRequest = await prisma.refundRequest.create({
-      data: {
-        userId,
-        amount,
-        reason: reason.trim(),
-      },
+      return tx.refundRequest.create({
+        data: { userId, amount, reason: reason.trim() },
+      });
     });
 
     return NextResponse.json(refundRequest, { status: 201 });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.status && e?.message) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
     console.error("Refund request error:", e);
     return NextResponse.json(
       { error: "환불 요청 처리 중 오류가 발생했습니다." },

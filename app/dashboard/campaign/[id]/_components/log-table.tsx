@@ -26,7 +26,6 @@ type Props = {
   logs: LogEntry[];
   summary: Summary;
   campaignId: string;
-  campaignStatus: string;
 };
 
 const logStatusLabel: Record<string, string> = {

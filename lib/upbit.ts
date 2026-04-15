@@ -16,7 +16,13 @@ interface UpbitTicker {
 }
 
 // 서버 사이드 시세 캐시 (5초 TTL)
-let cachedPrice: { price: number; timestamp: number } | null = null;
+let cachedTicker: {
+  price: number;
+  changeRate: number;
+  changePrice: number;
+  volume24h: number;
+  timestamp: number;
+} | null = null;
 const CACHE_TTL_MS = 5000;
 
 /**
@@ -31,14 +37,8 @@ export async function getUsdtKrwPrice(): Promise<{
   timestamp: number;
 }> {
   // 캐시 체크
-  if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_TTL_MS) {
-    return {
-      price: cachedPrice.price,
-      changeRate: 0,
-      changePrice: 0,
-      volume24h: 0,
-      timestamp: cachedPrice.timestamp,
-    };
+  if (cachedTicker && Date.now() - cachedTicker.timestamp < CACHE_TTL_MS) {
+    return { ...cachedTicker };
   }
 
   try {
@@ -58,27 +58,21 @@ export async function getUsdtKrwPrice(): Promise<{
       throw new Error('No ticker data returned');
     }
 
-    // 캐시 업데이트
-    cachedPrice = { price: ticker.trade_price, timestamp: Date.now() };
-
-    return {
+    // 캐시 업데이트 (전체 ticker 데이터 저장)
+    cachedTicker = {
       price: ticker.trade_price,
       changeRate: ticker.change_rate,
       changePrice: ticker.signed_change_price,
       volume24h: ticker.acc_trade_volume_24h,
       timestamp: ticker.timestamp,
     };
+
+    return { ...cachedTicker };
   } catch (error) {
     // 캐시된 값이 있으면 오래되더라도 반환 (fallback)
-    if (cachedPrice) {
+    if (cachedTicker) {
       console.warn('[Upbit] REST API failed, using stale cache:', error);
-      return {
-        price: cachedPrice.price,
-        changeRate: 0,
-        changePrice: 0,
-        volume24h: 0,
-        timestamp: cachedPrice.timestamp,
-      };
+      return { ...cachedTicker };
     }
     throw error;
   }

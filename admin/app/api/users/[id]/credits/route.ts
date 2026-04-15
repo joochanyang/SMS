@@ -83,44 +83,36 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       );
     }
 
-    // Verify user exists
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true, credits: true, status: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: '유저를 찾을 수 없습니다.' }, { status: 404 });
-    }
-
-    // Deduction: check sufficient balance
     const isDeduction = type === 'ADMIN_DEDUCT' || amount < 0;
-    const userCredits = Number(user.credits);
-    if (isDeduction && userCredits < absAmount) {
-      await logAdminAction(admin, 'CREDIT_ADJUST_FAILED', 'User', id, reason, req, {
-        result: 'FAILURE',
-        metadata: { amount, type, currentBalance: userCredits, error: 'INSUFFICIENT_BALANCE' },
-      });
-      return NextResponse.json(
-        { error: `잔액 부족: 현재 ${userCredits.toLocaleString('ko-KR')}원, 차감 요청 ${absAmount.toLocaleString('ko-KR')}원` },
-        { status: 400 },
-      );
-    }
 
-    // CRITICAL: Atomic transaction — credit update + ledger entry
+    // CRITICAL: Atomic transaction — balance check + credit update + ledger entry
     const result = await prisma.$transaction(async (tx) => {
-      // Atomic credit update using increment/decrement
+      // Balance check INSIDE transaction to prevent TOCTOU
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: { id: true, email: true, credits: true, status: true },
+      });
+
+      if (!user) {
+        throw Object.assign(new Error('유저를 찾을 수 없습니다.'), { status: 404 });
+      }
+
+      const userCredits = Number(user.credits);
+      if (isDeduction && userCredits < absAmount) {
+        throw Object.assign(
+          new Error(`잔액 부족: 현재 ${userCredits.toLocaleString('ko-KR')}원, 차감 요청 ${absAmount.toLocaleString('ko-KR')}원`),
+          { status: 400, code: 'INSUFFICIENT_BALANCE', currentBalance: userCredits },
+        );
+      }
+
       const creditChange = isDeduction ? -absAmount : absAmount;
 
       const updatedUser = await tx.user.update({
         where: { id },
-        data: {
-          credits: { increment: creditChange },
-        },
+        data: { credits: { increment: creditChange } },
         select: { id: true, credits: true },
       });
 
-      // Create ledger entry
       const ledger = await tx.creditLedger.create({
         data: {
           userId: id,
@@ -135,12 +127,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         },
       });
 
-      return { updatedUser, ledger };
+      return { user, updatedUser, ledger };
     });
 
     // Audit log (outside transaction — non-blocking)
     await logAdminAction(admin, 'CREDIT_ADJUST', 'User', id, reason, req, {
-      previousValue: { credits: user.credits },
+      previousValue: { credits: result.user.credits },
       newValue: { credits: result.updatedUser.credits },
       metadata: {
         amount: isDeduction ? -absAmount : absAmount,
@@ -152,12 +144,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     return NextResponse.json({
       success: true,
-      previousBalance: user.credits,
+      previousBalance: result.user.credits,
       newBalance: result.updatedUser.credits,
       adjustment: isDeduction ? -absAmount : absAmount,
       ledger: result.ledger,
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.status && err?.message) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return handleError(err);
   }
 }

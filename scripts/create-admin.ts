@@ -5,6 +5,13 @@ import { Pool } from 'pg'
 import bcrypt from 'bcryptjs'
 
 async function main() {
+  const password = process.argv[2]
+  if (!password || password.length < 8) {
+    console.error('사용법: npx tsx scripts/create-admin.ts <비밀번호>')
+    console.error('비밀번호는 최소 8자 이상이어야 합니다.')
+    process.exit(1)
+  }
+
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 5,
@@ -16,7 +23,7 @@ async function main() {
   // 기존 admin이 있으면 삭제
   await prisma.user.deleteMany({ where: { username: 'admin' } })
 
-  const hash = await bcrypt.hash('asd123', 12)
+  const hash = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({
     data: {
       username: 'admin',

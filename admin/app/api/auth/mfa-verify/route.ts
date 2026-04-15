@@ -5,6 +5,7 @@ import * as OTPAuth from 'otpauth';
 import crypto from 'crypto';
 import { getClientIp, getClientUserAgent } from '@/lib/admin-session';
 import { decryptMfaSecret } from '@/lib/mfa-crypto';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const SESSION_COOKIE = 'admin_session';
 
@@ -20,6 +21,15 @@ export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
     const ua = getClientUserAgent(request);
+
+    // MFA 브루트포스 방지: IP당 15분에 5회
+    const rl = checkRateLimit(`mfa-verify:${ip}`, RATE_LIMITS.LOGIN);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `요청이 너무 많습니다. ${Math.ceil((rl.retryAfterMs ?? 60000) / 1000)}초 후 다시 시도하세요.` },
+        { status: 429 },
+      );
+    }
 
     // Find session with mfaVerified = false
     const token = request.cookies.get(SESSION_COOKIE)?.value;

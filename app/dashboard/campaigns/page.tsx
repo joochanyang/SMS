@@ -107,9 +107,8 @@ export default async function CampaignsPage() {
             {campaigns.map((campaign) => (
               <tr
                 key={campaign.id}
-                style={{ backgroundColor: 'transparent', cursor: 'pointer', transition: 'background-color 0.1s' }}
-                onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--surface-hover)'; }}
-                onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                className="table-row-hover"
+                style={{ cursor: 'pointer' }}
               >
                 <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)' }}>
                   <a

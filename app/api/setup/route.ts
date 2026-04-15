@@ -1,24 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { withRateLimit } from '@/lib/api-rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 분당 3회, 시간당 10회
+    const rl = await withRateLimit(request, { maxPerMinute: 3, maxPerHour: 10 });
+    if (!rl.allowed) return rl.response!;
+
     const setupSecret = process.env.SETUP_SECRET;
     if (!setupSecret) {
-      return NextResponse.json({ error: 'Setup disabled.' }, { status: 403 });
+      return NextResponse.json({ error: '셋업이 비활성화되어 있습니다.' }, { status: 403 });
     }
 
     const body = await request.json();
     const { secret, password } = body as { secret?: string; password?: string };
 
-    if (!secret || secret !== setupSecret) {
-      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+    if (
+      !secret ||
+      secret.length !== setupSecret.length ||
+      !crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(setupSecret))
+    ) {
+      return NextResponse.json({ error: '접근이 거부되었습니다.' }, { status: 403 });
     }
 
     if (!password || typeof password !== 'string' || password.length < 8) {
       return NextResponse.json(
-        { error: 'Password must be at least 8 characters.' },
+        { error: '비밀번호는 최소 8자 이상이어야 합니다.' },
         { status: 400 }
       );
     }
@@ -51,6 +61,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Setup error:', error);
-    return NextResponse.json({ error: 'Setup failed.' }, { status: 500 });
+    return NextResponse.json({ error: '셋업 처리 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

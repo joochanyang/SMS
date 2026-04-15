@@ -34,6 +34,21 @@ export function isGsm7(text: string): boolean {
   return true;
 }
 
+// GSM-7 확장 테이블 문자 (이스케이프 시퀀스로 2자로 카운트)
+const GSM7_EXTENSION_CHARS = new Set('€[]{|}~\\^');
+
+/**
+ * GSM-7 인코딩 기준 실제 문자 수 계산
+ * 확장문자(€, [, ], {, }, |, ~, \, ^)는 이스케이프+문자로 2자로 카운트
+ */
+function getGsm7CharCount(text: string): number {
+  let count = 0;
+  for (const ch of text) {
+    count += GSM7_EXTENSION_CHARS.has(ch) ? 2 : 1;
+  }
+  return count;
+}
+
 /**
  * Calculate SMS segment info for a message.
  * Returns encoding type, character count, max chars per SMS, and number of SMS parts.
@@ -46,7 +61,7 @@ export function getSmsSegmentInfo(text: string): {
   warning: string | null;
 } {
   const gsm7 = isGsm7(text);
-  const charCount = text.length;
+  const charCount = gsm7 ? getGsm7CharCount(text) : text.length;
   const singleMax = gsm7 ? SMS_POLICY.gsm7MaxChars : SMS_POLICY.ucs2MaxChars;
   const concatMax = gsm7 ? SMS_POLICY.gsm7ConcatChars : SMS_POLICY.ucs2ConcatChars;
 

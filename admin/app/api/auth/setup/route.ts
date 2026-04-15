@@ -10,7 +10,7 @@ import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
 const setupSchema = z.object({
   secret: z.string().min(1, '설정 시크릿이 필요합니다.'),
   username: z.string().min(1, '아이디를 입력하세요.'),
-  password: z.string().min(4, '비밀번호는 최소 4자 이상이어야 합니다.'),
+  password: z.string().min(16, '비밀번호는 최소 16자 이상이어야 합니다.'),
   name: z.string().min(1, '이름을 입력하세요.'),
 });
 
@@ -21,7 +21,7 @@ const setupSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // 1. Check ADMIN_SETUP_SECRET is configured
-    const setupSecret = process.env.ADMIN_SETUP_SECRET;
+    const setupSecret = process.env.ADMIN_SETUP_SECRET || process.env.SETUP_SECRET;
     if (!setupSecret) {
       return NextResponse.json(
         { error: '초기 설정이 비활성화되어 있습니다.' },

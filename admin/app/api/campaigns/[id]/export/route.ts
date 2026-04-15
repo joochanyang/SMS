@@ -56,6 +56,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       CANCELLED: '취소',
     };
 
+    // 전화번호 마스킹 (앞 4자리 + 뒤 2자리 표시, 나머지 *)
+    function maskPhone(phone: string): string {
+      if (phone.length <= 6) return phone;
+      const prefix = phone.slice(0, 4);
+      const suffix = phone.slice(-2);
+      const masked = '*'.repeat(phone.length - 6);
+      return `${prefix}${masked}${suffix}`;
+    }
+
     // CSV 생성 (BOM 포함 — 엑셀 한국어 호환)
     const BOM = '\uFEFF';
     // CSV 이스케이프 헬퍼
@@ -73,7 +82,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       const log = logs[i];
       const row = [
         String(i + 1),
-        log.targetNumber,
+        maskPhone(log.targetNumber),
         csvEscape(log.messageBody),
         statusLabels[log.status] ?? log.status,
         log.networkName ?? '',

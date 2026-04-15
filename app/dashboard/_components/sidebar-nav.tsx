@@ -1,14 +1,14 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Send, CreditCard, History, BarChart3, LayoutDashboard } from 'lucide-react';
+import { Send, CreditCard, History, BarChart3, BookUser } from 'lucide-react';
 
 const MENU_ITEMS = [
   { name: '문자 발송', href: '/dashboard/sms-send', icon: Send },
   { name: '발송 내역', href: '/dashboard/history', icon: History },
   { name: '캠페인 관리', href: '/dashboard/campaigns', icon: BarChart3 },
+  { name: '주소록', href: '/dashboard/address-book', icon: BookUser },
   { name: '잔액충전', href: '/dashboard/wallet/usdt', icon: CreditCard },
 ];
 

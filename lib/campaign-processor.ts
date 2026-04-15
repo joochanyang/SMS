@@ -183,13 +183,19 @@ export async function processCampaignBatch(
     };
   }
 
-  // 발송할 건이 없으면 완료 처리
+  // 발송할 건이 없으면 완료 여부 확인
   if (sendableLogs.length === 0) {
-    await prisma.smsCampaign.update({
-      where: { id: campaignId },
-      data: { status: "COMPLETED" },
+    const remainingCount = await prisma.smsLog.count({
+      where: { campaignId, status: { in: ["PENDING", "RETRY_PENDING", "SENDING"] } },
     });
-    return { processed: 0, remaining: 0, status: "COMPLETED" };
+    if (remainingCount === 0) {
+      await prisma.smsCampaign.update({
+        where: { id: campaignId },
+        data: { status: "COMPLETED" },
+      });
+      return { processed: 0, remaining: 0, status: "COMPLETED" };
+    }
+    return { processed: 0, remaining: remainingCount, status: campaign.status };
   }
 
   // SENDING 상태로 전환
@@ -293,13 +299,15 @@ export async function processCampaignBatch(
       const providerStatus = result?.providerStatus ?? result?.status ?? "SENT";
 
       const isFailed = result?.status === "FAILED";
-      const tempError = isFailed || isTemporaryProviderError(String(providerStatus));
+      const tempError = !isFailed && isTemporaryProviderError(String(providerStatus));
       const isRetryExceeded = log.retryCount + 1 >= SMS_POLICY.maxRetries;
-      const nextStatus = tempError
-        ? isRetryExceeded
-          ? "FAILED"
-          : "RETRY_PENDING"
-        : "SENT";
+      const nextStatus = isFailed
+        ? "FAILED"
+        : tempError
+          ? isRetryExceeded
+            ? "FAILED"
+            : "RETRY_PENDING"
+          : "SENT";
 
       await tx.smsLog.update({
         where: { id: sendableLogs[i].id },
