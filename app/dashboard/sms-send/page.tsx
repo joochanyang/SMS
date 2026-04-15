@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
-import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, Shuffle, BookUser } from 'lucide-react';
+import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, BookUser } from 'lucide-react';
 
 type RecipientWithVars = { phone: string; name?: string; nickname?: string };
 
@@ -79,7 +79,8 @@ export default function SmsSendPage() {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [costPerMessage, setCostPerMessage] = useState<number>(14);
   
-  const [senderId, setSenderId] = useState('');
+  const [senderId] = useState('');
+  const [substitutionMode, setSubstitutionMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -382,40 +383,15 @@ export default function SmsSendPage() {
             flexDirection: 'column',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
           }}>
-            {/* 발신번호 */}
+            {/* 잔여 건수 */}
             <div style={{
-              display: 'flex', alignItems: 'center', padding: '0.75rem 1rem',
-              borderBottom: '1px solid #F3F4F6', gap: '0.5rem'
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem',
+              borderBottom: '1px solid #F3F4F6',
             }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>발신번호</label>
-              <input
-                type="text"
-                maxLength={11}
-                placeholder="자동 생성 (매 발송마다 변경)"
-                value={senderId}
-                onChange={(e) => setSenderId(e.target.value.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 11))}
-                disabled={isSending}
-                style={{
-                  flex: 1, padding: '0.4rem 0.6rem', border: '1px solid #E5E7EB', borderRadius: '6px',
-                  fontSize: '0.85rem', color: '#111827', outline: 'none',
-                }}
-              />
-              <button
-                onClick={() => {
-                  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                  const alphanum = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-                  let id = alpha[Math.floor(Math.random() * 26)];
-                  for (let i = 1; i < 8; i++) id += alphanum[Math.floor(Math.random() * 36)];
-                  setSenderId(id);
-                }}
-                title="랜덤 생성"
-                style={{
-                  padding: '0.4rem', borderRadius: '6px', border: '1px solid #E5E7EB',
-                  background: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                }}
-              >
-                <Shuffle size={16} color="#4F46E5" />
-              </button>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151' }}>잔여 건수</span>
+              <span style={{ fontSize: '1rem', fontWeight: 800, color: availableSendCount > 0 ? '#4F46E5' : '#EF4444' }}>
+                {availableSendCount.toLocaleString()}건
+              </span>
             </div>
 
             {/* Header info */}
@@ -437,23 +413,22 @@ export default function SmsSendPage() {
                 display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#4F46E5', fontWeight: 600,
               }}>
                 <BookUser size={14} /> 주소록: {addressBookName} ({recipientsWithVars.length}명)
-                <span style={{ color: '#6B7280', fontWeight: 400 }}>| {'{이름}'}, {'{별명}'} 입력 시 자동 치환</span>
               </div>
             )}
 
             {/* Main Text Area */}
             <div style={{ position: 'relative', height: '280px' }}>
               <textarea
-                placeholder={addressBookMode ? "메시지를 입력하세요. {이름}, {별명} 변수를 사용할 수 있습니다." : "문자 메시지 - SMS"}
+                placeholder={substitutionMode ? "메시지를 입력하세요. {이름}, {별명} 변수를 사용할 수 있습니다." : "문자 메시지 - SMS"}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 disabled={isSending}
-                style={{ 
-                  width: '100%', height: '100%', border: 'none', resize: 'none', 
+                style={{
+                  width: '100%', height: '100%', border: 'none', resize: 'none',
                   padding: '1rem', fontSize: '1rem', color: '#111827', outline: 'none'
                 }}
               />
-              <button 
+              <button
                 onClick={() => setMessage('')}
                 style={{
                   position: 'absolute', bottom: '1rem', right: '1rem',
@@ -465,6 +440,37 @@ export default function SmsSendPage() {
               >
                 <RotateCcw size={16} />
               </button>
+            </div>
+
+            {/* 치환모드 */}
+            <div style={{ borderTop: '1px solid #F3F4F6', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button
+                onClick={() => setSubstitutionMode(!substitutionMode)}
+                style={{
+                  padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                  border: substitutionMode ? '1px solid #4F46E5' : '1px solid #E5E7EB',
+                  backgroundColor: substitutionMode ? 'rgba(79, 70, 229, 0.1)' : '#FFFFFF',
+                  color: substitutionMode ? '#4F46E5' : '#6B7280',
+                }}
+              >
+                치환모드 {substitutionMode ? 'ON' : 'OFF'}
+              </button>
+              {substitutionMode && (
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button
+                    onClick={() => setMessage((prev) => prev + '{이름}')}
+                    style={{ padding: '0.3rem 0.6rem', borderRadius: '4px', border: '1px solid #C7D2FE', backgroundColor: '#EEF2FF', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    {'{이름}'}
+                  </button>
+                  <button
+                    onClick={() => setMessage((prev) => prev + '{별명}')}
+                    style={{ padding: '0.3rem 0.6rem', borderRadius: '4px', border: '1px solid #C7D2FE', backgroundColor: '#EEF2FF', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    {'{별명}'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div style={{ borderTop: '1px solid #F3F4F6' }} />
@@ -499,7 +505,18 @@ export default function SmsSendPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#111827', margin: 0 }}>발송대상</h2>
-              <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: 600 }}>{validRecipients.length} 유효 발송대상</span>
+              <span style={{
+                fontSize: '0.9rem', fontWeight: 700, color: '#FFFFFF',
+                backgroundColor: validRecipients.length > 0 ? '#4F46E5' : '#9CA3AF',
+                padding: '0.2rem 0.6rem', borderRadius: '12px', minWidth: '2rem', textAlign: 'center',
+              }}>
+                {validRecipients.length}건
+              </span>
+              {parsedRecipients.length !== validRecipients.length && (
+                <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 600 }}>
+                  (무효 {parsedRecipients.length - validRecipients.length - rawDuplicateCount}건{rawDuplicateCount > 0 ? `, 중복 ${rawDuplicateCount}건` : ''})
+                </span>
+              )}
             </div>
             
             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -566,7 +583,7 @@ export default function SmsSendPage() {
             ) : (
                <div style={{ flex: 1, overflowY: 'auto', maxHeight: '500px' }}>
                  {validRecipients.slice(0, 50).map((num, i) => {
-                   const vars = addressBookMode ? recipientsWithVars.find((r) => r.phone === num) : null;
+                   const vars = (addressBookMode || substitutionMode) ? recipientsWithVars.find((r) => r.phone === num) : null;
                    const preview = vars && message ? message.replace(/\{이름\}/g, vars.name || '').replace(/\{별명\}/g, vars.nickname || '') : '';
                    return (
                    <div key={i} style={{

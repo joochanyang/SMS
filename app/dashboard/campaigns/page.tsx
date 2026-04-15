@@ -77,7 +77,7 @@ export default async function CampaignsPage() {
       processedCount: true,
       deliveredCount: true,
       failedCount: true,
-      estimatedCost: true,
+      messageBody: true,
       createdAt: true,
     },
   });
@@ -85,7 +85,7 @@ export default async function CampaignsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>캠페인 관리</h2>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>발송내역 관리</h2>
         <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>총 {campaigns.length}개</span>
       </div>
 
@@ -93,14 +93,13 @@ export default async function CampaignsPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid var(--border-strong)' }}>
           <thead style={{ backgroundColor: 'var(--border)' }}>
             <tr style={{ color: 'var(--text-main)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>이름</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>발송문구</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>상태</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>수신자수</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>처리</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>전달</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>실패</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>생성일</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)', textAlign: 'right' }}>비용</th>
             </tr>
           </thead>
           <tbody>
@@ -110,12 +109,12 @@ export default async function CampaignsPage() {
                 className="table-row-hover"
                 style={{ cursor: 'pointer' }}
               >
-                <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)' }}>
+                <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <a
                     href={`/dashboard/campaign/${campaign.id}`}
                     style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', textDecoration: 'none' }}
                   >
-                    {campaign.name || '이름 없는 캠페인'}
+                    {campaign.messageBody || campaign.name || '-'}
                   </a>
                 </td>
                 <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)' }}>
@@ -129,12 +128,11 @@ export default async function CampaignsPage() {
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--primary)', border: '1px solid var(--border-strong)' }}>{campaign.deliveredCount.toLocaleString()}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: campaign.failedCount > 0 ? '#ef4444' : 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{campaign.failedCount.toLocaleString()}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(campaign.createdAt)}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${campaign.estimatedCost.toFixed(2)}</td>
               </tr>
             ))}
             {campaigns.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   캠페인이 없습니다. 문자 발송 페이지에서 새 캠페인을 생성하세요.
                 </td>
               </tr>
