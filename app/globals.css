@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap');
-
 :root {
   /* Brand - Clean Light SaaS Theme */
   --primary: #4F46E5;       /* Indigo/Purple from '전송하기' */
@@ -16,12 +14,6 @@
   /* Text */
   --text-main: #111827;     /* Standard dark text */
   --text-secondary: #6B7280; /* Gray text */
-  --text-muted: #9CA3AF;     /* Muted text */
-  
-  /* Effects */
-  --header-blur: 16px;
-  --bg-gradient: none;
-  --btn-gradient: none;
   
   /* Enamel Black specific variants (for Sidebar) */
   --sidebar-bg: #000000;
@@ -40,7 +32,7 @@
 body {
   background-color: var(--bg-color);
   color: var(--text-main);
-  font-family: 'Inter', 'Noto Sans KR', sans-serif;
+  font-family: var(--font-pretendard), 'Pretendard Variable', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -75,14 +67,6 @@ input, textarea, select {
   border: 1px solid var(--border);
   border-radius: 8px !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-.auth-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  backdrop-filter: none;
 }
 
 .btn-primary {
@@ -125,4 +109,35 @@ input, textarea, select {
 }
 .table-row-hover:hover {
   background-color: var(--surface-hover);
+}
+
+/* 사이드바 링크 hover */
+.sidebar-link {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.sidebar-link:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--sidebar-text);
+}
+.sidebar-link-active {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--sidebar-text);
+}
+.sidebar-link-active:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 로그아웃 버튼 hover */
+.signout-btn {
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+}
+.signout-btn:hover {
+  color: #ef4444;
+}
+
+/* 스켈레톤 로딩 애니메이션 */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   // Rate limit: 분당 5회, 시간당 120회
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error("[Cron] CRON_SECRET 환경변수가 설정되지 않았습니다.");
+    logger.error("[Cron] CRON_SECRET 환경변수가 설정되지 않았습니다.");
     return NextResponse.json(
       { error: "접근이 거부되었습니다." },
       { status: 403 },
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    console.log(
+    logger.info(
       `[Cron] 만료 입금 정리 완료: ${result.count}건 EXPIRED 처리`,
     );
 
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
       expiredCount: result.count,
     });
   } catch (e) {
-    console.error("[Cron] 만료 입금 정리 오류:", e);
+    logger.error("[Cron] 만료 입금 정리 오류", { error: toLogError(e) });
     return NextResponse.json(
       { error: "내부 서버 오류입니다." },
       { status: 500 },

@@ -6,6 +6,8 @@
  * - 서버 사이드 캐싱 (5초 TTL) 으로 API 호출 최소화
  */
 
+import { logger, toLogError } from '@/lib/logger';
+
 interface UpbitTicker {
   market: string;
   trade_price: number;      // 최근 체결가
@@ -71,7 +73,7 @@ export async function getUsdtKrwPrice(): Promise<{
   } catch (error) {
     // 캐시된 값이 있으면 오래되더라도 반환 (fallback)
     if (cachedTicker) {
-      console.warn('[Upbit] REST API failed, using stale cache:', error);
+      logger.warn('[Upbit] REST API failed, using stale cache', { error: toLogError(error) });
       return { ...cachedTicker };
     }
     throw error;
@@ -126,17 +128,17 @@ export async function getKrwUsdRate(): Promise<number> {
     exchangeRateCache = { rate: krwRate, fetchedAt: now };
     return krwRate;
   } catch (error) {
-    console.warn("[환율] API 조회 실패, 캐시 확인:", error);
+    logger.warn("[환율] API 조회 실패, 캐시 확인", { error: toLogError(error) });
 
     // 캐시가 있고 1시간 이내이면 stale 캐시 반환
     if (exchangeRateCache && now - exchangeRateCache.fetchedAt < EXCHANGE_RATE_MAX_STALENESS_MS) {
-      console.warn("[환율] stale 캐시 사용:", exchangeRateCache.rate);
+      logger.warn("[환율] stale 캐시 사용", { metadata: { rate: exchangeRateCache.rate } });
       return exchangeRateCache.rate;
     }
 
     // 캐시 자체가 없으면(서버 최초 기동) fallback 사용
     if (!exchangeRateCache) {
-      console.warn("[환율] 캐시 없음, fallback 환율 사용:", FALLBACK_EXCHANGE_RATE);
+      logger.warn("[환율] 캐시 없음, fallback 환율 사용", { metadata: { rate: FALLBACK_EXCHANGE_RATE } });
       exchangeRateCache = { rate: FALLBACK_EXCHANGE_RATE, fetchedAt: now };
       return FALLBACK_EXCHANGE_RATE;
     }

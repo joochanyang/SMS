@@ -96,14 +96,3 @@ export function resetRateLimit(key: string): void {
   store.delete(key);
 }
 
-/**
- * 특정 prefix로 시작하는 모든 키 초기화
- * 예: resetRateLimitByPrefix('login:192.168.1.1') → 해당 IP의 모든 rate limit 초기화
- */
-export function resetRateLimitByPrefix(prefix: string): void {
-  for (const key of store.keys()) {
-    if (key.startsWith(prefix)) {
-      store.delete(key);
-    }
-  }
-}

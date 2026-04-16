@@ -22,33 +22,21 @@ export default function SidebarNav() {
         const isActive = pathname.startsWith(item.href);
           
         return (
-          <Link 
-            key={item.href} 
-            href={item.href} 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.75rem', 
-              padding: '0.75rem 1rem', 
-              borderRadius: '0px', 
-              transition: 'all 0.2s ease', 
+          <Link
+            key={item.href}
+            href={item.href}
+            className={isActive ? 'sidebar-link sidebar-link-active' : 'sidebar-link'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.75rem 1rem',
+              borderRadius: '0px',
               textDecoration: 'none',
               fontWeight: isActive ? 600 : 500,
-              color: isActive ? 'var(--sidebar-text)' : 'var(--sidebar-text-sec)', 
+              color: isActive ? 'var(--sidebar-text)' : 'var(--sidebar-text-sec)',
               backgroundColor: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
               border: isActive ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid transparent',
-            }}
-            onMouseOver={(e) => {
-              if (!isActive) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
-                (e.currentTarget as HTMLElement).style.color = 'var(--sidebar-text)';
-              }
-            }}
-            onMouseOut={(e) => {
-              if (!isActive) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                (e.currentTarget as HTMLElement).style.color = 'var(--sidebar-text-sec)';
-              }
             }}
           >
             <item.icon size={18} color={isActive ? 'var(--sidebar-text)' : 'var(--sidebar-text-sec)'} />

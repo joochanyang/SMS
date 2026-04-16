@@ -2,6 +2,7 @@
 // SMS Provider Router — SystemSetting에서 활성 프로바이더를 결정
 // ---------------------------------------------------------------------------
 
+import { logger } from '../logger';
 import { prisma } from '../prisma';
 import type { SmsProvider, SmsProviderName } from './types';
 import { InfobipProvider } from './infobip';
@@ -31,7 +32,7 @@ export async function getActiveProvider(): Promise<SmsProvider> {
   const provider = factory();
 
   if (!provider.isConfigured()) {
-    console.warn(`[SmsRouter] ${providerName} 프로바이더가 설정되지 않았습니다. infobip으로 폴백합니다.`);
+    logger.warn(`[SmsRouter] ${providerName} 프로바이더가 설정되지 않았습니다. infobip으로 폴백합니다.`);
     return new InfobipProvider();
   }
 

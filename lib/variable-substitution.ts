@@ -10,10 +10,3 @@ export function substituteVars(
     .replace(/\{별명\}/g, vars.nickname || "");
 }
 
-/**
- * 템플릿 문자열에서 사용된 변수 목록을 추출합니다.
- */
-export function extractPlaceholders(template: string): string[] {
-  const matches = template.match(/\{[^}]+\}/g);
-  return matches ? [...new Set(matches)] : [];
-}

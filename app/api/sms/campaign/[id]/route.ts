@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       { status: 200 }
     );
   } catch (e) {
-    console.error("Get campaign error:", e);
+    logger.error("Get campaign error", { error: toLogError(e) });
     return NextResponse.json({ error: "내부 서버 오류입니다." }, { status: 500 });
   }
 }
@@ -154,7 +155,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (e) {
-    console.error("Delete campaign error:", e);
+    logger.error("Delete campaign error", { error: toLogError(e) });
     return NextResponse.json({ error: "삭제 중 오류가 발생했습니다." }, { status: 500 });
   }
 }
@@ -193,9 +194,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
       if (refundAmount > 0) {
         // 크레딧 환불 (atomic increment)
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: campaign.userId },
           data: { credits: { increment: refundAmount } },
+          select: { credits: true },
         });
 
         // 환불 트랜잭션 기록
@@ -205,6 +207,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             amount: refundAmount,
             type: "DEPOSIT",
             description: `캠페인 취소 환불 (미처리 ${unprocessedCount}건)`,
+          },
+        });
+
+        // CreditLedger 감사 추적
+        await tx.creditLedger.create({
+          data: {
+            userId: campaign.userId,
+            type: "CAMPAIGN_REFUND",
+            amount: refundAmount,
+            balanceAfter: updatedUser.credits,
+            referenceType: "CAMPAIGN",
+            referenceId: id,
+            description: `캠페인 취소 환불 (${campaign.id})`,
+            idempotencyKey: `cancel-${campaign.id}`,
           },
         });
       }
@@ -232,7 +248,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       { status: 200 }
     );
   } catch (e) {
-    console.error("Cancel campaign error:", e);
+    logger.error("Cancel campaign error", { error: toLogError(e) });
     return NextResponse.json({ error: "내부 서버 오류입니다." }, { status: 500 });
   }
 }

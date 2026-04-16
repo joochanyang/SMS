@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ user }, { status: 201 });
   } catch (e) {
-    console.error("Register error:", e);
+    logger.error("Register error", { error: toLogError(e) });
     return NextResponse.json(
       { error: "회원가입 처리 중 오류가 발생했습니다." },
       { status: 500 },

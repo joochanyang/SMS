@@ -148,9 +148,10 @@ export async function processCampaignBatch(
         },
       });
       if (refundAmount > 0) {
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: userId },
           data: { credits: { increment: refundAmount } },
+          select: { credits: true },
         });
         await tx.transaction.create({
           data: {
@@ -158,6 +159,19 @@ export async function processCampaignBatch(
             amount: refundAmount,
             type: "DEPOSIT",
             description: `블랙리스트 차단 환불 (${blockedLogs.length}건)`,
+          },
+        });
+        // CreditLedger 감사 추적
+        await tx.creditLedger.create({
+          data: {
+            userId,
+            type: "CAMPAIGN_REFUND",
+            amount: refundAmount,
+            balanceAfter: updatedUser.credits,
+            referenceType: "CAMPAIGN",
+            referenceId: campaignId,
+            description: `블랙리스트 차단 환불 (${blockedLogs.length}건)`,
+            idempotencyKey: `blacklist-refund-${campaignId}-${Date.now()}`,
           },
         });
       }

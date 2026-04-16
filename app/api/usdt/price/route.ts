@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withRateLimit } from "@/lib/api-rate-limit";
 import { getUsdtKrwPrice } from "@/lib/upbit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       source: "upbit",
     });
   } catch (error) {
-    console.error("[USDT Price] Error:", error);
+    logger.error("[USDT Price] Error", { error: toLogError(error) });
     return NextResponse.json(
       { error: "시세 정보를 가져올 수 없습니다." },
       { status: 503 }

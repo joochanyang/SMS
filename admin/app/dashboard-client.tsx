@@ -7,20 +7,17 @@ import {
   CheckCircle,
   XCircle,
   DollarSign,
-  Activity,
+
   Database,
   Power,
   AlertTriangle,
 } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+const TpsChart = dynamic(() => import('@/components/tps-chart'), {
+  loading: () => <div style={{ width: '100%', height: 280, background: 'var(--surface-hover)', borderRadius: '8px', animation: 'pulse 1.5s ease-in-out infinite' }} />,
+  ssr: false,
+});
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import StatCard from '@/components/stat-card';
@@ -206,40 +203,7 @@ export default function DashboardClient() {
           <div className="chart-card">
             <h3 className="chart-card-title">발송 TPS (최근 1시간)</h3>
             <div style={{ width: '100%', height: 280 }}>
-              <ResponsiveContainer>
-                <LineChart data={stats?.tpsData ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,41,59,0.5)" />
-                  <XAxis
-                    dataKey="time"
-                    stroke="#64748B"
-                    fontSize={12}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    stroke="#64748B"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#0F172A',
-                      border: '1px solid rgba(30,41,59,0.5)',
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                    }}
-                    labelStyle={{ color: '#94A3B8' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="tps"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#10B981' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <TpsChart data={stats?.tpsData ?? []} />
             </div>
           </div>
 

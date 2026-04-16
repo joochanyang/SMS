@@ -15,7 +15,6 @@ export type Permission =
   | 'admin:read' | 'admin:manage'
   | 'audit:read'
   | 'killswitch:toggle'
-  | 'refund:approve_l1' | 'refund:approve_l2'
   | 'dashboard:read';
 
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'VIEWER';
@@ -42,7 +41,6 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
     'admin:read', 'admin:manage',
     'audit:read',
     'killswitch:toggle',
-    'refund:approve_l1', 'refund:approve_l2',
     'dashboard:read',
   ],
   ADMIN: [
@@ -53,7 +51,6 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
     'template:read', 'template:review',
     'setting:read',
     'audit:read', // own only — enforced at query level
-    'refund:approve_l1',
     'dashboard:read',
   ],
   SUPPORT: [

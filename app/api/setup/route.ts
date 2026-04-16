@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { withRateLimit } from '@/lib/api-rate-limit';
+import { logger, toLogError } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('Setup error:', error);
+    logger.error('Setup error', { error: toLogError(error) });
     return NextResponse.json({ error: '셋업 처리 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

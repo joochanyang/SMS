@@ -174,22 +174,26 @@ export default function UsdtDepositClient() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'linear-gradient(90deg, #374151 0%, #FFFFFF 100%)',
-        border: 'none',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+        background: '#FFFFFF',
+        border: '1px solid #E5E7EB',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)',
+        borderRadius: '16px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* USDT 3D 로고 */}
           <div style={{
-            width: '56px', height: '56px', borderRadius: '16px',
-            background: '#FFFFFF',
+            width: '56px', height: '56px', borderRadius: '50%',
+            background: 'linear-gradient(145deg, #50AF95 0%, #2E8B6E 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, fontSize: '0.85rem', color: '#111827',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            boxShadow: '0 6px 16px rgba(80, 175, 149, 0.35), inset 0 2px 4px rgba(255,255,255,0.3)',
+            position: 'relative' as const,
           }}>
-            USDT
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117" fill="#FFFFFF"/>
+            </svg>
           </div>
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '2px', fontWeight: 600 }}>
+            <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '4px', fontWeight: 500, letterSpacing: '0.02em' }}>
               USDT/KRW 실시간 시세
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
@@ -200,7 +204,7 @@ export default function UsdtDepositClient() {
                 <span style={{
                   fontSize: '0.85rem',
                   fontWeight: 600,
-                  color: '#111827',
+                  color: priceData.changeRate >= 0 ? '#10B981' : '#EF4444',
                 }}>
                   {priceData.changeRate >= 0 ? '+' : ''}{(priceData.changeRate * 100).toFixed(2)}%
                 </span>
@@ -210,13 +214,14 @@ export default function UsdtDepositClient() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: '0.35rem',
-            padding: '0.5rem 1rem', borderRadius: '20px',
-            fontSize: '0.8rem', fontWeight: 700,
-            backgroundColor: 'rgba(0,0,0,0.05)',
-            color: '#111827',
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.4rem 0.9rem', borderRadius: '20px',
+            fontSize: '0.75rem', fontWeight: 700,
+            backgroundColor: connected ? 'rgba(16, 185, 129, 0.08)' : 'rgba(156, 163, 175, 0.1)',
+            color: connected ? '#10B981' : '#9CA3AF',
+            border: `1px solid ${connected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(156, 163, 175, 0.2)'}`,
           }}>
-            <Radio size={12} fill="#ef4444" color="#ef4444" />
+            <Radio size={10} fill={connected ? '#10B981' : '#9CA3AF'} color={connected ? '#10B981' : '#9CA3AF'} />
             {connected ? 'LIVE' : 'REST'}
           </div>
         </div>

@@ -128,25 +128,20 @@ export async function POST(request: NextRequest) {
           const refundAmount = cancelResult.count * Number(campaign.costPerMessage);
 
           if (refundAmount > 0) {
-            const user = await tx.user.findUnique({
+            // 환불 후 실제 잔액을 update 반환값에서 가져옴 (동일 유저 다중 캠페인 시 누적 오류 방지)
+            const updatedUser = await tx.user.update({
               where: { id: campaign.userId },
+              data: { credits: { increment: refundAmount } },
               select: { credits: true },
             });
 
-            if (user) {
-              const newBalance = Number(user.credits) + refundAmount;
-
-              await tx.user.update({
-                where: { id: campaign.userId },
-                data: { credits: { increment: refundAmount } },
-              });
-
+            if (updatedUser) {
               await tx.creditLedger.create({
                 data: {
                   userId: campaign.userId,
                   type: 'REFUND',
                   amount: refundAmount,
-                  balanceAfter: newBalance,
+                  balanceAfter: Number(updatedUser.credits),
                   description: `킬 스위치 GLOBAL_STOP 환불 (캠페인: ${campaign.name ?? campaign.id})`,
                   adminId: admin.id,
                   referenceType: 'CAMPAIGN',

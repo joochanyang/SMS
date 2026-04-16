@@ -7,6 +7,7 @@ import {
   CampaignProcessError,
 } from "@/lib/campaign-processor";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Rate limit: 분당 30회, 시간당 300회
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }
     }
 
-    console.error("캠페인 처리 오류:", e);
+    logger.error("캠페인 처리 오류", { error: toLogError(e) });
     return NextResponse.json({ error: "내부 서버 오류입니다." }, { status: 500 });
   }
 }

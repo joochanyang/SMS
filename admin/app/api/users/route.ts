@@ -4,7 +4,8 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
-import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
+import { validatePasswordPolicy } from '@/lib/admin-auth';
+import bcrypt from 'bcryptjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -163,7 +164,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '이미 등록된 계정입니다.' }, { status: 409 });
     }
 
-    const passwordHash = await hashPassword(password);
+    // 유저 로그인(lib/auth.ts)이 bcrypt.compare를 사용하므로 bcrypt로 해싱
+    const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
       data: {

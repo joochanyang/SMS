@@ -29,7 +29,6 @@ model User {
   transactions    Transaction[]
   creditLedger    CreditLedger[]
   templates       MessageTemplate[]
-  refundRequests  RefundRequest[]
   usdtDeposits    UsdtDeposit[]
   addressBooks    AddressBook[]
 }
@@ -89,6 +88,7 @@ model SmsLog {
   @@index([campaignId, createdAt])
   @@index([status, createdAt])
   @@index([status, nextRetryAt])
+  @@index([userId, status])
 }
 
 model Transaction {
@@ -99,6 +99,9 @@ model Transaction {
   type          String    // DEPOSIT, WITHDRAWAL
   description   String?
   createdAt     DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
 }
 
 // ===== 관리자 시스템 =====
@@ -129,7 +132,6 @@ model AdminUser {
   sessions            AdminSession[]
   auditLogs           AuditLog[]
 
-  @@index([email])
   @@index([role, status])
 }
 
@@ -205,21 +207,6 @@ model Blacklist {
   @@index([userId])
 }
 
-model CreditCoupon {
-  id          String    @id @default(cuid())
-  code        String    @unique
-  amount      Decimal   @db.Decimal(12, 4)
-  description String?
-  isUsed      Boolean   @default(false)
-  usedById    String?
-  usedAt      DateTime?
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-  createdById String?
-
-  @@index([code])
-}
-
 model CreditLedger {
   id              String    @id @default(cuid())
   userId          String
@@ -276,27 +263,6 @@ model MessageTemplate {
   @@index([status])
 }
 
-model RefundRequest {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  amount          Decimal   @db.Decimal(12, 4)
-  reason          String
-  evidence        Json?
-  status          String    @default("PENDING")
-  createdById     String?
-  requestedAt     DateTime  @default(now())
-  l1ApprovedById  String?
-  l1ApprovedAt    DateTime?
-  l2ApprovedById  String?
-  l2ApprovedAt    DateTime?
-  executedAt      DateTime?
-  rejectReason    String?
-
-  @@index([userId, status])
-  @@index([status])
-}
-
 model UsdtDeposit {
   id              String    @id @default(cuid())
   userId          String
@@ -320,7 +286,6 @@ model UsdtDeposit {
 
   @@index([userId, createdAt])
   @@index([status])
-  @@index([txid])
 }
 
 model PasswordResetToken {

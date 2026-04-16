@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { Globe2 } from 'lucide-react';
 import SignOutButton from './_components/signout-button';
 import SidebarNav from './_components/sidebar-nav';
+import DashboardHeader from './_components/dashboard-header';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -46,9 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Main Content */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-color)' }}>
-        <header style={{ height: '70px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 2rem', backgroundColor: '#FFFFFF' }}>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>대시보드</h1>
-        </header>
+        <DashboardHeader />
         <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
           {children}
         </div>

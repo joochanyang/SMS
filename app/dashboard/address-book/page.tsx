@@ -16,12 +16,14 @@ export default function AddressBookListPage() {
   const [books, setBooks] = useState<AddressBook[]>([]);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchBooks = () => {
+    setFetchError(null);
     fetch('/api/address-book')
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => { if (data?.addressBooks) setBooks(data.addressBooks); })
-      .catch(() => {});
+      .catch(() => { setFetchError('주소록을 불러오는 중 오류가 발생했습니다.'); });
   };
 
   useEffect(() => { fetchBooks(); }, []);
@@ -53,6 +55,12 @@ export default function AddressBookListPage() {
         <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>주소록 관리</h2>
         <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>총 {books.length}개</span>
       </div>
+
+      {fetchError && (
+        <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.875rem' }}>
+          {fetchError}
+        </div>
+      )}
 
       {/* 주소록 추가 */}
       <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>

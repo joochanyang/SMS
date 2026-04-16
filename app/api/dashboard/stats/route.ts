@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   try {
@@ -162,7 +163,7 @@ export async function GET(req: NextRequest) {
       recentCampaigns: recentCampaignsFormatted,
     });
   } catch (error) {
-    console.error("대시보드 통계 조회 오류:", error);
+    logger.error("대시보드 통계 조회 오류", { error: toLogError(error) });
     return NextResponse.json(
       { error: "통계 데이터를 불러오는 중 오류가 발생했습니다." },
       { status: 500 }

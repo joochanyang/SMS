@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ShieldOff, Plus, Trash2 } from 'lucide-react';
+import { ShieldOff, Plus, Trash2 } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';

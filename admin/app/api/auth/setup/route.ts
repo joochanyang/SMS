@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { prisma } from '@shared/prisma';
 import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
 
@@ -41,8 +42,10 @@ export async function POST(request: NextRequest) {
 
     const { secret, username, password, name } = parsed.data;
 
-    // 3. Verify setup secret
-    if (secret !== setupSecret) {
+    // 3. Verify setup secret (timing-safe comparison)
+    const secretBuffer = Buffer.from(secret);
+    const expectedBuffer = Buffer.from(setupSecret);
+    if (secretBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(secretBuffer, expectedBuffer)) {
       return NextResponse.json(
         { error: '설정 시크릿이 올바르지 않습니다.' },
         { status: 403 },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       message: "비밀번호가 변경되었습니다.",
     });
   } catch (e) {
-    console.error("Password reset error:", e);
+    logger.error("Password reset error", { error: toLogError(e) });
     return NextResponse.json(
       { error: "비밀번호 변경 처리 중 오류가 발생했습니다." },
       { status: 500 },

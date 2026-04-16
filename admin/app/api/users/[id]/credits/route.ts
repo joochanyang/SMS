@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, hasPermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ const creditAdjustSchema = z.object({
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAuth(req);
+    await requireSudo(req, admin);
     const { id } = await context.params;
 
     const body = await req.json();
@@ -151,7 +153,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     });
   } catch (err: any) {
     if (err?.status && err?.message) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      const response: any = { error: err.message };
+      if (err.requireSudo) response.requireSudo = true;
+      return NextResponse.json(response, { status: err.status });
     }
     return handleError(err);
   }

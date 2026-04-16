@@ -79,7 +79,6 @@ export default function SmsSendPage() {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [costPerMessage, setCostPerMessage] = useState<number>(14);
   
-  const [senderId] = useState('');
   const [substitutionMode, setSubstitutionMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -281,7 +280,6 @@ export default function SmsSendPage() {
             ? { recipientsWithVars: recipientsWithVars.filter((r) => validRecipients.includes(r.phone)) }
             : { recipients: validRecipients }),
           message,
-          ...(senderId.trim() && { senderId: senderId.trim() }),
         }),
       });
       const createData = await createRes.json();
@@ -369,10 +367,10 @@ export default function SmsSendPage() {
       )}
 
       {/* Top Layout: Left (Editor) + Right (Recipients) */}
-      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-        
+      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+
         {/* Left Column: Phone/Editor View */}
-        <div style={{ width: '340px', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: '0 0 340px', minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
           
           <div style={{ 
             backgroundColor: '#FFFFFF', 
@@ -535,7 +533,16 @@ export default function SmsSendPage() {
                 <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} disabled={isSending} onChange={(e) => { const file = e.target.files?.[0]; if (file) parseCsvFile(file); }} />
                 파일 업로드
               </label>
-              <button onClick={() => {}} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => {
+                const csvContent = 'phone,name,nickname\n+821012345678,홍길동,길동이\n+821098765432,김철수,철수\n';
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '수신자_양식.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              }} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
                 양식 다운
               </button>
               <button 
@@ -695,7 +702,7 @@ export default function SmsSendPage() {
             발송 내역이 없습니다.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
             {recentCampaigns.map((c) => {
               const statusLabel = c.status === 'COMPLETED' ? '전송완료' : c.status === 'FAILED' ? '실패' : c.status === 'CANCELLED' ? '취소' : c.status === 'SCHEDULED' ? '예약됨' : '처리중';
               return (

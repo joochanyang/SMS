@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     return successResponse;
   } catch (e) {
-    console.error("Password reset request error:", e);
+    logger.error("Password reset request error", { error: toLogError(e) });
     return NextResponse.json(
       { error: "비밀번호 재설정 요청 처리 중 오류가 발생했습니다." },
       { status: 500 },

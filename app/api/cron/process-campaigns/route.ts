@@ -11,6 +11,7 @@ import {
   processCampaignBatch,
   CampaignProcessError,
 } from "@/lib/campaign-processor";
+import { logger, toLogError } from "@/lib/logger";
 
 /** 캠페인당 한 cron 실행에서 최대 배치 반복 횟수 */
 const MAX_BATCHES_PER_CAMPAIGN = 3;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error("[Cron] CRON_SECRET 환경변수가 설정되지 않았습니다.");
+    logger.error("[Cron] CRON_SECRET 환경변수가 설정되지 않았습니다.");
     return NextResponse.json(
       { error: "접근이 거부되었습니다." },
       { status: 403 },
@@ -144,9 +145,9 @@ export async function POST(req: NextRequest) {
               break;
             }
           } else {
-            console.error(
-              `[Cron] 캠페인 ${campaign.id} 처리 중 오류:`,
-              e,
+            logger.error(
+              `[Cron] 캠페인 ${campaign.id} 처리 중 오류`,
+              { error: toLogError(e) },
             );
             errorMsg = "내부 오류가 발생했습니다.";
           }
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
       campaigns: results,
     });
   } catch (e) {
-    console.error("[Cron] 캠페인 자동 처리 오류:", e);
+    logger.error("[Cron] 캠페인 자동 처리 오류", { error: toLogError(e) });
     return NextResponse.json(
       { error: "내부 서버 오류입니다." },
       { status: 500 },

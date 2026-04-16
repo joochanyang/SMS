@@ -13,6 +13,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
 import { getUsdtKrwPrice, krwToUsd } from "@/lib/upbit";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[USDT Deposit] Error:", error);
+    logger.error("[USDT Deposit] Error", { error: toLogError(error) });
     return NextResponse.json(
       { error: "입금 요청 처리 중 오류가 발생했습니다." },
       { status: 500 }
@@ -150,7 +151,7 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("[USDT Deposit List] Error:", error);
+    logger.error("[USDT Deposit List] Error", { error: toLogError(error) });
     return NextResponse.json(
       { error: "입금 내역 조회 중 오류가 발생했습니다." },
       { status: 500 }

@@ -11,21 +11,30 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    const res = await signIn('credentials', {
-      redirect: false,
-      username,
-      password,
-    });
+    try {
+      const res = await signIn('credentials', {
+        redirect: false,
+        username,
+        password,
+      });
 
-    if (res?.error) {
-      setError('아이디 또는 비밀번호가 올바르지 않습니다.');
-    } else {
-      router.push('/dashboard/sms-send');
+      if (res?.error) {
+        setError('아이디 또는 비밀번호가 올바르지 않습니다.');
+      } else {
+        router.push('/dashboard/sms-send');
+        return;
+      }
+    } catch {
+      setError('로그인 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -97,8 +106,8 @@ export default function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.875rem' }}>
-            로그인
+          <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', marginTop: '0.5rem', padding: '0.875rem', opacity: loading ? 0.7 : 1 }}>
+            {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
 

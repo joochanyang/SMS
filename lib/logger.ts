@@ -82,6 +82,12 @@ function emit(level: LogLevel, message: string, data?: Partial<LogEntry>): void 
   }
 }
 
+/** unknown 타입의 catch error를 LogEntry.error 형태로 변환 */
+export function toLogError(err: unknown): { message: string; stack?: string } {
+  if (err instanceof Error) return { message: err.message, stack: err.stack };
+  return { message: String(err) };
+}
+
 export const logger = {
   debug(message: string, data?: Partial<LogEntry>) {
     emit("debug", message, data);

@@ -29,8 +29,6 @@ const actionLabels: Record<string, string> = {
   CREDIT_ADJUST_FAILED: '크레딧 조정 실패', CAMPAIGN_STOP: '캠페인 중지',
   BLACKLIST_ADD: '블랙리스트 추가', BLACKLIST_REMOVE: '블랙리스트 제거',
   TEMPLATE_APPROVE: '템플릿 승인', TEMPLATE_REJECT: '템플릿 거절',
-  REFUND_CREATE: '환불 생성', REFUND_APPROVE_L1: '환불 1차 승인',
-  REFUND_EXECUTE: '환불 실행', REFUND_REJECT: '환불 거절',
   SETTING_UPDATE: '설정 변경', ADMIN_CREATE: '관리자 생성',
   ADMIN_UPDATE: '관리자 수정', ADMIN_DELETE: '관리자 삭제',
   KILLSWITCH_TOGGLE: '킬스위치 변경', AUDIT_QUERY: '감사 로그 조회',
@@ -145,7 +143,6 @@ export default function AuditPage() {
               <option value="SystemSetting">SystemSetting</option>
               <option value="Blacklist">Blacklist</option>
               <option value="MessageTemplate">MessageTemplate</option>
-              <option value="RefundRequest">RefundRequest</option>
             </select>
             <select className="filter-select" value={resultFilter} onChange={(e) => { setResultFilter(e.target.value); setPage(1); }}>
               <option value="">전체 결과</option>

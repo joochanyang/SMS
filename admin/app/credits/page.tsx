@@ -23,7 +23,7 @@ interface LedgerRow {
 
 const typeLabels: Record<string, string> = {
   ADMIN_ADD: '관리자 충전', ADMIN_DEDUCT: '관리자 차감', CORRECTION: '보정',
-  BONUS: '보너스', REFUND: '환불', SMS_COST: 'SMS 비용', DEPOSIT: '입금',
+  BONUS: '보너스', SMS_COST: 'SMS 비용', DEPOSIT: '입금',
 };
 
 export default function CreditsPage() {
@@ -107,7 +107,6 @@ export default function CreditsPage() {
               <option value="ADMIN_ADD">관리자 충전</option>
               <option value="ADMIN_DEDUCT">관리자 차감</option>
               <option value="SMS_COST">SMS 비용</option>
-              <option value="REFUND">환불</option>
               <option value="DEPOSIT">입금</option>
               <option value="BONUS">보너스</option>
               <option value="CORRECTION">보정</option>

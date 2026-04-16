@@ -113,7 +113,7 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="4자 이상"
+              placeholder="8자 이상"
               required
               minLength={8}
               style={inputStyle}

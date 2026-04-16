@@ -34,7 +34,7 @@ export default function Home() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
             padding: '0.5rem 1rem', borderRadius: '999px',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(79, 70, 229, 0.08)', color: 'var(--text-main)', border: '1px solid rgba(79, 70, 229, 0.12)',
             fontSize: '0.875rem', fontWeight: 500, marginBottom: '2.5rem'
           }}>
             <Zap size={16} color="var(--text-secondary)" /> 글로벌 전달률 99.9%
@@ -76,7 +76,7 @@ export default function Home() {
             >
               <div style={{
                 width: '48px', height: '48px', borderRadius: '12px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'rgba(79, 70, 229, 0.06)', border: '1px solid rgba(79, 70, 229, 0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'var(--text-main)'
               }}>

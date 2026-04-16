@@ -40,8 +40,7 @@ function getEncryptionKey(): Buffer | null {
 export function encryptMfaSecret(plainSecret: string): string {
   const key = getEncryptionKey();
   if (!key) {
-    console.warn('[mfa-crypto] MFA_ENCRYPTION_KEY 미설정 — MFA 시크릿이 평문으로 저장됩니다.');
-    return plainSecret;
+    throw new Error('MFA_ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
   }
 
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -64,8 +63,7 @@ export function encryptMfaSecret(plainSecret: string): string {
 export function decryptMfaSecret(encrypted: string): string {
   const key = getEncryptionKey();
   if (!key) {
-    console.warn('[mfa-crypto] MFA_ENCRYPTION_KEY 미설정 — 평문으로 간주합니다.');
-    return encrypted;
+    throw new Error('MFA_ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
   }
 
   // 암호화된 형식이 아니면 (구분자 `:` 2개 미포함) 평문으로 간주

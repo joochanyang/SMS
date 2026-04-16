@@ -59,11 +59,12 @@ export async function POST(req: NextRequest) {
     if (hasVars) {
       const rawPhones = body.recipientsWithVars!.map((r) => r.phone);
       recipients = normalizeRecipients(rawPhones);
-      // 정규화된 번호 → 변수 매핑 (원본 번호와 정규화 번호 매칭)
-      const normalizedList = normalizeRecipients(rawPhones);
-      for (let i = 0; i < rawPhones.length; i++) {
-        const norm = normalizedList[i];
-        if (norm) varsMap.set(norm, body.recipientsWithVars![i]);
+      // 정규화된 번호 → 변수 매핑 (개별 정규화로 중복 제거 후에도 올바르게 매칭)
+      for (const recipientWithVars of body.recipientsWithVars!) {
+        const normalizedPhone = normalizeRecipients([recipientWithVars.phone])[0];
+        if (normalizedPhone && !varsMap.has(normalizedPhone)) {
+          varsMap.set(normalizedPhone, recipientWithVars);
+        }
       }
     } else {
       recipients = normalizeRecipients(body.recipients ?? []);

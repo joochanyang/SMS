@@ -20,6 +20,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
 import { verifyTRC20Transaction } from "@/lib/tron-verify";
+import { logger, toLogError } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[USDT Verify] Error:", error);
+    logger.error("[USDT Verify] Error", { error: toLogError(error) });
     return NextResponse.json(
       { error: "검증 처리 중 오류가 발생했습니다." },
       { status: 500 }

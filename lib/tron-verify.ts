@@ -9,6 +9,8 @@
  * 5. Duplicate Check: DB에서 이미 처리된 TXID 여부
  */
 
+import { logger, toLogError } from '@/lib/logger';
+
 const TRONGRID_BASE = 'https://api.trongrid.io';
 const USDT_CONTRACT = process.env.USDT_CONTRACT_ADDRESS || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
@@ -79,7 +81,7 @@ async function getTransactionInfo(txid: string): Promise<TronTxInfo | null> {
     });
 
     if (!res.ok) {
-      console.error(`[TronGrid] getTransactionInfo failed: ${res.status}`);
+      logger.error(`[TronGrid] getTransactionInfo failed: ${res.status}`);
       return null;
     }
 
@@ -92,7 +94,7 @@ async function getTransactionInfo(txid: string): Promise<TronTxInfo | null> {
 
     return data as TronTxInfo;
   } catch (error) {
-    console.error('[TronGrid] getTransactionInfo error:', error);
+    logger.error('[TronGrid] getTransactionInfo error', { error: toLogError(error) });
     return null;
   }
 }
@@ -110,7 +112,7 @@ async function getTRC20TransferByTxid(txid: string, toAddress: string): Promise<
     );
 
     if (!res.ok) {
-      console.error(`[TronGrid] getTRC20Transfers failed: ${res.status}`);
+      logger.error(`[TronGrid] getTRC20Transfers failed: ${res.status}`);
       return null;
     }
 
@@ -120,7 +122,7 @@ async function getTRC20TransferByTxid(txid: string, toAddress: string): Promise<
     // TXID로 매칭
     return transfers.find(t => t.transaction_id === txid) || null;
   } catch (error) {
-    console.error('[TronGrid] getTRC20Transfers error:', error);
+    logger.error('[TronGrid] getTRC20Transfers error', { error: toLogError(error) });
     return null;
   }
 }
@@ -159,7 +161,7 @@ async function getTRC20TransferViaTronScan(txid: string): Promise<TRC20Transfer 
       block_timestamp: data.timestamp || Date.now(),
     };
   } catch (error) {
-    console.error('[TronScan] Fallback query error:', error);
+    logger.error('[TronScan] Fallback query error', { error: toLogError(error) });
     return null;
   }
 }
