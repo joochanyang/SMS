@@ -30,25 +30,23 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   try {
     const result = await processCampaignBatch(id, session.user.id, batchSize);
 
-    // 기존 API 호환성을 위해 캠페인 상세 정보 포함
-    const updatedCampaign = await prisma.smsCampaign.findUnique({
+    // 폴링 한 번으로 캠페인 최신 상태까지 받을 수 있도록 함께 반환
+    const campaign = await prisma.smsCampaign.findUnique({
       where: { id },
       select: {
         id: true,
         status: true,
-        totalRecipients: true,
         processedCount: true,
-        deliveredCount: true,
+        totalRecipients: true,
         failedCount: true,
-        updatedAt: true,
+        deliveredCount: true,
       },
     });
 
     return NextResponse.json(
       {
-        campaign: updatedCampaign,
-        processed: result.processed,
-        ...(result.blacklistedCount && { blacklistedCount: result.blacklistedCount }),
+        ...result,
+        campaign,
       },
       { status: 200 },
     );

@@ -111,18 +111,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enforce single-SMS limit: GSM-7 = 160 chars, UCS-2 = 70 chars
-    // 치환 모드: 각 수신자별 치환 후 최대 길이 검증
+    // 치환 모드 길이 정책:
+    //   - 절대 한도(GSM-7 1530자 / UCS-2 670자, 즉 concat 10파트) 초과 → 해당 수신자만 스킵
+    //   - 1파트 한도 초과 ~ 절대 한도 이하 → 분할 과금 경고와 함께 통과
+    //   - 비치환 모드는 아래의 단일 메시지 검증을 그대로 사용
+    type SkippedRecipient = { phone: string; reason: string; length: number };
+    type OverLimitWarning = { phone: string; parts: number; length: number };
+    const skippedRecipients: SkippedRecipient[] = [];
+    const overLimitWarnings: OverLimitWarning[] = [];
+
     if (hasVars) {
       for (const [phone, vars] of varsMap.entries()) {
         const substituted = substituteVars(message!, vars);
         const info = getSmsSegmentInfo(substituted);
-        if (info.parts > 1) {
-          return NextResponse.json(
-            { error: `수신자 ${phone}의 치환 메시지가 ${info.charCount}자입니다. 최대 ${info.maxCharsPerSms}자까지 발송 가능합니다.` },
-            { status: 400 },
-          );
+        // concat 절대 한도: 단일 SMS 최대 파트 수(10)와 파트당 글자수의 곱
+        const maxConcatChars =
+          (info.encoding === 'GSM-7'
+            ? SMS_POLICY.gsm7ConcatChars
+            : SMS_POLICY.ucs2ConcatChars) * 10;
+
+        if (info.charCount > maxConcatChars) {
+          skippedRecipients.push({
+            phone,
+            reason: 'TOO_LONG',
+            length: info.charCount,
+          });
+          continue;
         }
+        if (info.charCount > info.maxCharsPerSms) {
+          overLimitWarnings.push({
+            phone,
+            parts: info.parts,
+            length: info.charCount,
+          });
+        }
+      }
+
+      // 길이 초과로 스킵된 수신자를 발송 대상에서 제외
+      if (skippedRecipients.length > 0) {
+        const skippedSet = new Set(skippedRecipients.map((s) => s.phone));
+        recipients = recipients.filter((p) => !skippedSet.has(p));
+        for (const phone of skippedSet) varsMap.delete(phone);
+      }
+
+      if (recipients.length === 0) {
+        return NextResponse.json(
+          {
+            error: '치환 후 모든 수신자의 메시지가 최대 길이를 초과했습니다.',
+            skipped: skippedRecipients,
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -274,6 +313,8 @@ export async function POST(req: NextRequest) {
           warning: segmentInfo.warning,
         },
         ...(blacklisted.size > 0 && { blacklistedCount: blacklisted.size }),
+        ...(skippedRecipients.length > 0 && { skipped: skippedRecipients }),
+        ...(overLimitWarnings.length > 0 && { warnings: overLimitWarnings }),
       },
       { status: 201 },
     );

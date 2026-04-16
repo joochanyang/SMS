@@ -196,9 +196,8 @@ export default function SmsSendPage() {
   const processCampaignLoop = async (campaignId: string) => {
     for (let i = 0; i < 1000; i++) {
         if (cancelledRef.current) {
-            const detailRes = await fetch(`/api/sms/campaign/${campaignId}`);
-            const detailData = await detailRes.json();
-            return detailData.campaign;
+            // 취소 시: 더 이상 process를 호출하지 않고 마지막 progress 스냅샷을 반환
+            return progress ?? { id: campaignId, status: 'CANCELLED', processedCount: 0, totalRecipients: 0, failedCount: 0, deliveredCount: 0 };
         }
         const processRes = await fetch(`/api/sms/campaign/${campaignId}/process`, {
             method: 'POST',
@@ -216,11 +215,12 @@ export default function SmsSendPage() {
             throw new Error(processData.error || '캠페인 처리 중 오류가 발생했습니다.');
         }
 
-        const detailRes = await fetch(`/api/sms/campaign/${campaignId}`);
-        const detailData = await detailRes.json();
-        if (!detailRes.ok) throw new Error(detailData.error || '캠페인 상태 조회 실패');
-
-        const campaign = detailData.campaign;
+        const campaign = processData.campaign;
+        if (!campaign) {
+            // 502 등 일시 오류로 campaign이 없으면 잠시 대기 후 재시도
+            await sleep(500);
+            continue;
+        }
         setProgress({
             id: campaign.id,
             status: campaign.status,
@@ -231,7 +231,7 @@ export default function SmsSendPage() {
         });
 
         if (['COMPLETED', 'CANCELLED', 'FAILED'].includes(campaign.status)) return campaign;
-        await sleep(1000);
+        await sleep(500);
     }
     throw new Error('자동 처리 루프가 제한을 초과했습니다.');
   };
@@ -272,12 +272,20 @@ export default function SmsSendPage() {
 
     try {
       setIsSending(true);
+      const useVarsPayload = addressBookMode || substitutionMode;
+      const varsPayload: RecipientWithVars[] = useVarsPayload
+        ? validRecipients.map((phone) => {
+            const found = recipientsWithVars.find((r) => r.phone === phone);
+            return found ?? { phone, name: '', nickname: '' };
+          })
+        : [];
+
       const createRes = await fetch('/api/sms/campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(addressBookMode
-            ? { recipientsWithVars: recipientsWithVars.filter((r) => validRecipients.includes(r.phone)) }
+          ...(useVarsPayload
+            ? { recipientsWithVars: varsPayload }
             : { recipients: validRecipients }),
           message,
         }),
@@ -290,6 +298,15 @@ export default function SmsSendPage() {
 
       const campaignId = createData.campaignId as string;
       activeCampaignIdRef.current = campaignId;
+      // 첫 응답 오기 전에 모달 진행률을 0/N으로 즉시 세팅
+      setProgress({
+        id: campaignId,
+        status: 'PENDING',
+        processedCount: 0,
+        totalRecipients: createData.totalRecipients ?? validRecipients.length,
+        failedCount: 0,
+        deliveredCount: 0,
+      });
       // 전송 중 모달에서 진행 상태를 표시하므로 별도 상태 메시지 불필요
       const finalCampaign = await processCampaignLoop(campaignId);
 

@@ -16,11 +16,46 @@ import type { SmsProvider, SmsSendRequest, SmsSendResult, SmsProviderBalance } f
 
 const BASE_URL = 'https://api.sms.to';
 
-// ── 전달률 최적화 파라미터 ──
-const CONCURRENCY = 3;              // 동시 발송 3건 (통신사 버스트 감지 회피)
-const BASE_DELAY_MS = 800;          // 청크 간 기본 대기 800ms
-const JITTER_MS = 400;              // 랜덤 지터 0~400ms (패턴 회피)
-const NETWORK_RETRY_DELAY_MS = 3000; // 네트워크 에러 시 3초 후 재시도
+// ── 전달률 최적화 파라미터 (환경변수 오버라이드 가능) ──
+//
+// 운영 중 throttle 튜닝을 위해 .env 로 외부화함. 잘못된 값이 들어오면
+// 모듈 로드 시점에 즉시 throw 하여 무인지 발송 사고를 방지한다.
+//
+//   환경변수                    | 기본값 | 안전 범위
+//   --------------------------- | ------ | ----------------
+//   SMSTO_CONCURRENCY           | 8      | 1 ~ 50
+//   SMSTO_BASE_DELAY_MS         | 400    | 0 ~ 10000
+//   SMSTO_JITTER_MS             | 200    | 0 ~ 5000
+//   SMSTO_NETWORK_RETRY_MS      | 3000   | 100 ~ 30000
+//
+// 변경 후 200건 ≈ 17~22초 (기존 90~115초 대비 ~5배 단축).
+// SMS.to rate limit 100 req/sec, 통신사 버스트 감지 위험을 모두 고려한 기본값.
+// 긴급 원복 시 .env 에서 CONCURRENCY=3 / BASE_DELAY_MS=800 으로 되돌릴 것.
+const CONCURRENCY = Number(process.env.SMSTO_CONCURRENCY ?? 8);
+const BASE_DELAY_MS = Number(process.env.SMSTO_BASE_DELAY_MS ?? 400);
+const JITTER_MS = Number(process.env.SMSTO_JITTER_MS ?? 200);
+const NETWORK_RETRY_DELAY_MS = Number(process.env.SMSTO_NETWORK_RETRY_MS ?? 3000);
+
+if (!Number.isFinite(CONCURRENCY) || CONCURRENCY < 1 || CONCURRENCY > 50) {
+  throw new Error(
+    `SMSTO_CONCURRENCY 값이 유효하지 않습니다: ${process.env.SMSTO_CONCURRENCY} (허용 범위: 1 ~ 50)`,
+  );
+}
+if (!Number.isFinite(BASE_DELAY_MS) || BASE_DELAY_MS < 0 || BASE_DELAY_MS > 10000) {
+  throw new Error(
+    `SMSTO_BASE_DELAY_MS 값이 유효하지 않습니다: ${process.env.SMSTO_BASE_DELAY_MS} (허용 범위: 0 ~ 10000ms)`,
+  );
+}
+if (!Number.isFinite(JITTER_MS) || JITTER_MS < 0 || JITTER_MS > 5000) {
+  throw new Error(
+    `SMSTO_JITTER_MS 값이 유효하지 않습니다: ${process.env.SMSTO_JITTER_MS} (허용 범위: 0 ~ 5000ms)`,
+  );
+}
+if (!Number.isFinite(NETWORK_RETRY_DELAY_MS) || NETWORK_RETRY_DELAY_MS < 100 || NETWORK_RETRY_DELAY_MS > 30000) {
+  throw new Error(
+    `SMSTO_NETWORK_RETRY_MS 값이 유효하지 않습니다: ${process.env.SMSTO_NETWORK_RETRY_MS} (허용 범위: 100 ~ 30000ms)`,
+  );
+}
 
 export class SmsToProvider implements SmsProvider {
   readonly name = 'smsto' as const;
