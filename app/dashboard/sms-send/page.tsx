@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, BookUser } from 'lucide-react';
 
 type RecipientWithVars = { phone: string; name?: string; nickname?: string };
@@ -64,6 +65,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function SmsSendPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // 주소록 모드
   const [addressBookMode, setAddressBookMode] = useState(false);
@@ -191,6 +193,42 @@ export default function SmsSendPage() {
       },
       error: () => setStatusError('CSV 파싱 실패. 파일 형식을 확인하세요.'),
     });
+  };
+
+  const parseExcelFile = (file: File) => {
+    setStatusError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, blankrows: false, raw: false });
+        const values: string[] = [];
+        for (const row of rows) {
+          if (!Array.isArray(row)) continue;
+          for (const cell of row) {
+            const s = typeof cell === 'string' ? cell.trim() : cell != null ? String(cell).trim() : '';
+            if (s) values.push(s);
+          }
+        }
+        setRecipients(values.join('\n'));
+        setCsvFilename(file.name);
+      } catch {
+        setStatusError('엑셀 파싱 실패. 파일 형식을 확인하세요.');
+      }
+    };
+    reader.onerror = () => setStatusError('파일을 읽지 못했습니다.');
+    reader.readAsArrayBuffer(file);
+  };
+
+  const parseUploadedFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      parseExcelFile(file);
+    } else {
+      parseCsvFile(file);
+    }
   };
 
   const processCampaignLoop = async (campaignId: string) => {
@@ -535,32 +573,33 @@ export default function SmsSendPage() {
             </div>
             
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={() => setActiveTab('hidden')} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => router.push('/dashboard/address-book')} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
                 주소록
               </button>
-              <button 
-                onClick={() => setActiveTab(activeTab === 'manual' ? 'hidden' : 'manual')} 
+              <button
+                onClick={() => setActiveTab(activeTab === 'manual' ? 'hidden' : 'manual')}
                 style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: activeTab === 'manual' ? '1px solid #4F46E5' : '1px solid #E5E7EB', backgroundColor: activeTab === 'manual' ? 'rgba(79,70,229,0.05)' : '#FFFFFF', color: activeTab === 'manual' ? '#4F46E5' : '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
               >
                 직접 입력
               </button>
-              <label 
+              <label
                 style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               >
-                <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} disabled={isSending} onChange={(e) => { const file = e.target.files?.[0]; if (file) parseCsvFile(file); }} />
+                <input type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" style={{ display: 'none' }} disabled={isSending} onChange={(e) => { const file = e.target.files?.[0]; if (file) parseUploadedFile(file); e.target.value = ''; }} />
                 파일 업로드
               </label>
               <button onClick={() => {
-                const csvContent = 'phone,name,nickname\n+821012345678,홍길동,길동이\n+821098765432,김철수,철수\n';
-                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = '수신자_양식.csv';
-                a.click();
-                URL.revokeObjectURL(url);
+                const ws = XLSX.utils.aoa_to_sheet([
+                  ['phone', 'name', 'nickname'],
+                  ['+821012345678', '홍길동', '길동이'],
+                  ['+821098765432', '김철수', '철수'],
+                ]);
+                ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '수신자');
+                XLSX.writeFile(wb, '수신자_양식.xlsx');
               }} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', color: '#4B5563', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
-                양식 다운
+                양식 다운(엑셀)
               </button>
               <button 
                 onClick={() => { setRecipients(''); setMessage(''); setActiveTab('hidden'); }}

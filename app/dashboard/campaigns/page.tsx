@@ -14,29 +14,21 @@ function formatDateTime(date: Date) {
   }).format(date);
 }
 
-const campaignStatusStyle = (status: string) => {
-  const base = {
-    display: 'inline-flex' as const,
-    alignItems: 'center' as const,
-    gap: '0.375rem',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '0px',
-    fontSize: '0.7rem',
-    fontWeight: 700,
-  };
+const statusColor = (status: string): { bg: string; color: string; border: string } => {
   switch (status) {
     case 'COMPLETED':
-      return { ...base, backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-main)', border: '1px solid var(--border)' };
+      return { bg: 'rgba(16, 185, 129, 0.1)', color: '#10B981', border: 'rgba(16, 185, 129, 0.3)' };
     case 'SENDING':
-      return { ...base, backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid transparent' };
+      return { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' };
     case 'QUEUED':
-      return { ...base, backgroundColor: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: '1px solid transparent' };
+    case 'SCHEDULED':
+      return { bg: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
     case 'FAILED':
-      return { ...base, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid transparent' };
+      return { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' };
     case 'CANCELLED':
-      return { ...base, backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid transparent' };
+      return { bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)' };
     default:
-      return { ...base, backgroundColor: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: '1px solid transparent' };
+      return { bg: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
   }
 };
 
@@ -44,7 +36,8 @@ const statusIcon = (status: string) => {
   switch (status) {
     case 'COMPLETED': return <CheckCircle size={12} />;
     case 'SENDING': return <Loader size={12} />;
-    case 'QUEUED': return <Clock size={12} />;
+    case 'QUEUED':
+    case 'SCHEDULED': return <Clock size={12} />;
     case 'FAILED': return <XCircle size={12} />;
     case 'CANCELLED': return <Ban size={12} />;
     default: return <Clock size={12} />;
@@ -89,57 +82,65 @@ export default async function CampaignsPage() {
         <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>총 {campaigns.length}개</span>
       </div>
 
-      <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid var(--border-strong)' }}>
-          <thead style={{ backgroundColor: 'var(--border)' }}>
-            <tr style={{ color: 'var(--text-main)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>발송문구</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>상태</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>수신자수</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>처리</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>전달</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>실패</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>생성일</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((campaign) => (
-              <tr
+      {campaigns.length === 0 ? (
+        <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          캠페인이 없습니다. 문자 발송 페이지에서 새 캠페인을 생성하세요.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+          {campaigns.map((campaign) => {
+            const c = statusColor(campaign.status);
+            return (
+              <a
                 key={campaign.id}
-                className="table-row-hover"
-                style={{ cursor: 'pointer' }}
+                href={`/dashboard/campaign/${campaign.id}`}
+                style={{
+                  textDecoration: 'none',
+                  backgroundColor: 'var(--card-bg, #FFFFFF)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                  minHeight: '180px',
+                  color: 'inherit',
+                }}
               >
-                <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <a
-                    href={`/dashboard/campaign/${campaign.id}`}
-                    style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', textDecoration: 'none' }}
-                  >
-                    {campaign.messageBody || campaign.name || '-'}
-                  </a>
-                </td>
-                <td style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border-strong)' }}>
-                  <div style={campaignStatusStyle(campaign.status)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: c.bg, color: c.color, border: `1px solid ${c.border}` }}>
                     {statusIcon(campaign.status)}
                     {statusLabel[campaign.status] || campaign.status}
                   </div>
-                </td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{campaign.totalRecipients.toLocaleString()}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{campaign.processedCount.toLocaleString()}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--primary)', border: '1px solid var(--border-strong)' }}>{campaign.deliveredCount.toLocaleString()}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: campaign.failedCount > 0 ? '#ef4444' : 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{campaign.failedCount.toLocaleString()}</td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(campaign.createdAt)}</td>
-              </tr>
-            ))}
-            {campaigns.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  캠페인이 없습니다. 문자 발송 페이지에서 새 캠페인을 생성하세요.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDateTime(campaign.createdAt)}</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.7rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                  <span>수신자 <strong style={{ color: 'var(--text-main)' }}>{campaign.totalRecipients.toLocaleString()}</strong></span>
+                  <span>처리 <strong style={{ color: 'var(--text-main)' }}>{campaign.processedCount.toLocaleString()}</strong></span>
+                  <span>전달 <strong style={{ color: 'var(--primary)' }}>{campaign.deliveredCount.toLocaleString()}</strong></span>
+                  <span>실패 <strong style={{ color: campaign.failedCount > 0 ? '#ef4444' : 'var(--text-main)' }}>{campaign.failedCount.toLocaleString()}</strong></span>
+                </div>
+
+                <div style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--text-main)',
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-line',
+                  wordBreak: 'break-word',
+                  flex: 1,
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(0,0,0,0.02)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                }}>
+                  {campaign.messageBody || campaign.name || '(내용 없음)'}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
