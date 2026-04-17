@@ -8,7 +8,7 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-const publicPaths = ["/api/auth", "/api/infobip/dlr", "/api/cron", "/register"];
+const publicPaths = ["/api/auth", "/api/infobip/dlr", "/api/cron", "/api/health", "/register"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
