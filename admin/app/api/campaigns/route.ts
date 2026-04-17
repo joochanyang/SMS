@@ -92,14 +92,22 @@ export async function GET(request: NextRequest) {
     ]);
 
     const masked = campaigns.map((c) => ({
-      ...c,
+      id: c.id,
+      userName: c.user.name ?? (c.user.email ? maskEmail(c.user.email) : '-'),
+      messagePreview: (c.messageBody ?? '').slice(0, 40),
+      total: c.totalRecipients ?? 0,
+      sent: c.deliveredCount ?? 0,
+      failed: c.failedCount ?? 0,
+      status: c.status,
+      createdAt: c.createdAt,
       user: {
         ...c.user,
         email: c.user.email ? maskEmail(c.user.email) : null,
       },
     }));
 
-    return NextResponse.json({ campaigns: masked, total, page, limit });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return NextResponse.json({ campaigns: masked, total, totalPages, page, limit });
   } catch (err) {
     return handleError(err);
   }

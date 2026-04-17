@@ -172,6 +172,7 @@ export default function SmsProvidersPage() {
       <main className="admin-main">
         <Header title="SMS 라인 관리" />
 
+        <div className="admin-content">
         {loading ? (
           <div className="loading-container">
             <div className="spinner" />
@@ -270,6 +271,7 @@ export default function SmsProvidersPage() {
             ))}
           </div>
         )}
+        </div>
       </main>
 
       {/* 활성 라인 변경 모달 */}
