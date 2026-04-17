@@ -75,6 +75,7 @@ export default function UserDetailPage() {
   const [creditModal, setCreditModal] = useState(false);
   const [creditAmount, setCreditAmount] = useState('');
   const [creditType, setCreditType] = useState<'ADMIN_ADD' | 'ADMIN_DEDUCT'>('ADMIN_ADD');
+  const [creditUnit, setCreditUnit] = useState<'KRW' | 'COUNT'>('KRW');
   const [creditReason, setCreditReason] = useState('');
   const [creditLoading, setCreditLoading] = useState(false);
 
@@ -135,24 +136,34 @@ export default function UserDetailPage() {
   }
 
   async function handleCreditAdjust() {
-    const amount = parseFloat(creditAmount);
-    if (isNaN(amount) || amount <= 0 || creditReason.length < 10) return;
+    const value = parseFloat(creditAmount);
+    if (isNaN(value) || value <= 0 || creditReason.length < 10) return;
+    if (creditUnit === 'COUNT' && !Number.isInteger(value)) return;
     setCreditLoading(true);
     try {
+      const body: Record<string, unknown> = {
+        unit: creditUnit,
+        type: creditType,
+        reason: creditReason,
+      };
+      if (creditUnit === 'COUNT') {
+        body.count = value;
+      } else {
+        body.amount = creditType === 'ADMIN_DEDUCT' ? -value : value;
+      }
       const res = await fetch(`/api/users/${userId}/credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: creditType === 'ADMIN_DEDUCT' ? -amount : amount,
-          type: creditType,
-          reason: creditReason,
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         setCreditModal(false);
         setCreditAmount('');
         setCreditReason('');
         await fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '처리에 실패했습니다.');
       }
     } finally {
       setCreditLoading(false);
@@ -389,20 +400,50 @@ export default function UserDetailPage() {
         <div className="modal-overlay" onClick={() => setCreditModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
             <h3 style={{ marginBottom: '16px' }}>
-              {creditType === 'ADMIN_ADD' ? '크레딧 충전' : '크레딧 차감'}
+              {creditType === 'ADMIN_ADD'
+                ? (creditUnit === 'COUNT' ? '건수 지급' : '크레딧 충전')
+                : (creditUnit === 'COUNT' ? '건수 차감' : '크레딧 차감')}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="label">금액 (원)</label>
+                <label className="label">단위</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${creditUnit === 'KRW' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setCreditUnit('KRW')}
+                    style={{ flex: 1 }}
+                  >
+                    금액 (원)
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${creditUnit === 'COUNT' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setCreditUnit('COUNT')}
+                    style={{ flex: 1 }}
+                  >
+                    건수 (건)
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="label">{creditUnit === 'COUNT' ? '건수 (건)' : '금액 (원)'}</label>
                 <input
                   className="input"
                   type="number"
                   min="1"
+                  step={creditUnit === 'COUNT' ? 1 : 'any'}
                   value={creditAmount}
                   onChange={(e) => setCreditAmount(e.target.value)}
-                  placeholder="금액을 입력하세요"
+                  placeholder={creditUnit === 'COUNT' ? '건수를 입력하세요' : '금액을 입력하세요'}
                   style={{ width: '100%' }}
                 />
+                {creditUnit === 'COUNT' && user && Number(creditAmount) > 0 && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                    💡 {Number(creditAmount).toLocaleString('ko-KR')}건 × {Number(user.costPerMessage).toLocaleString('ko-KR')}원 = {(Number(creditAmount) * Number(user.costPerMessage)).toLocaleString('ko-KR')}원
+                    {creditType === 'ADMIN_ADD' ? ' 적립' : ' 차감'}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">사유 (10자 이상)</label>
