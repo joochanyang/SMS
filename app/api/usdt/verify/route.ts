@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 상태를 VERIFYING으로 업데이트 (DB unique constraint로 레이스 컨디션 방어)
+    const previousStatus = deposit.status;
     try {
       await prisma.usdtDeposit.update({
         where: { id: deposit.id },
@@ -115,12 +116,26 @@ export async function POST(req: NextRequest) {
       throw err;
     }
 
-    // 3. 블록체인 검증
-    const verification = await verifyTRC20Transaction(
-      txidClean,
-      deposit.walletAddress,
-      Number(deposit.usdtAmount),
-    );
+    // 3. 블록체인 검증 — 예외 발생 시 VERIFYING 상태에서 원상복구
+    let verification;
+    try {
+      verification = await verifyTRC20Transaction(
+        txidClean,
+        deposit.walletAddress,
+        Number(deposit.usdtAmount),
+      );
+    } catch (err) {
+      // 블록체인 API 호출 실패 시 이전 상태로 롤백하여 재시도 가능하게 함
+      await prisma.usdtDeposit.update({
+        where: { id: deposit.id },
+        data: {
+          status: previousStatus,
+          txid: null,
+          failReason: "블록체인 검증 중 오류 발생. 잠시 후 다시 시도해 주세요.",
+        },
+      });
+      throw err;
+    }
 
     if (!verification.valid) {
       // 검증 실패

@@ -46,38 +46,32 @@ export async function GET(request: NextRequest) {
     const yesterdayEnd = new Date(todayStart);
     yesterdayEnd.setMilliseconds(-1);
 
+    // CANCELLED 로그는 환불 처리되므로 총 발송/지출 집계에서 제외
+    const todayBase = { createdAt: { gte: todayStart, lte: todayEnd }, status: { not: 'CANCELLED' } };
+    const yesterdayBase = { createdAt: { gte: yesterdayStart, lte: yesterdayEnd }, status: { not: 'CANCELLED' } };
+
     // Today's stats
     const [todaySent, todaySuccess, todayFailed, todayCost] = await Promise.all([
-      prisma.smsLog.count({
-        where: { createdAt: { gte: todayStart, lte: todayEnd } },
-      }),
+      prisma.smsLog.count({ where: todayBase }),
       prisma.smsLog.count({
         where: { createdAt: { gte: todayStart, lte: todayEnd }, status: 'DELIVERED' },
       }),
       prisma.smsLog.count({
         where: { createdAt: { gte: todayStart, lte: todayEnd }, status: 'FAILED' },
       }),
-      prisma.smsLog.aggregate({
-        where: { createdAt: { gte: todayStart, lte: todayEnd } },
-        _sum: { cost: true },
-      }),
+      prisma.smsLog.aggregate({ where: todayBase, _sum: { cost: true } }),
     ]);
 
     // Yesterday's stats
     const [yesterdaySent, yesterdaySuccess, yesterdayFailed, yesterdayCost] = await Promise.all([
-      prisma.smsLog.count({
-        where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-      }),
+      prisma.smsLog.count({ where: yesterdayBase }),
       prisma.smsLog.count({
         where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd }, status: 'DELIVERED' },
       }),
       prisma.smsLog.count({
         where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd }, status: 'FAILED' },
       }),
-      prisma.smsLog.aggregate({
-        where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-        _sum: { cost: true },
-      }),
+      prisma.smsLog.aggregate({ where: yesterdayBase, _sum: { cost: true } }),
     ]);
 
     // Active campaigns

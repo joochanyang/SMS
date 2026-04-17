@@ -7,6 +7,11 @@ import { logger, toLogError } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
+    // 프로덕션에서는 사용 불가: 관리자 계정은 admin 패널의 /api/auth/setup 를 사용
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: '프로덕션에서는 사용할 수 없습니다.' }, { status: 403 });
+    }
+
     // Rate limit: 분당 3회, 시간당 10회
     const rl = await withRateLimit(request, { maxPerMinute: 3, maxPerHour: 10 });
     if (!rl.allowed) return rl.response!;

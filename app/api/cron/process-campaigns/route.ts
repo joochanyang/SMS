@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Cron API — QUEUED/SENDING 캠페인 자동 처리
-// 외부 cron 서비스에서 GET 요청으로 호출 (Authorization: Bearer {CRON_SECRET})
+// 외부 cron 서비스에서 POST 요청으로 호출 (Authorization: Bearer {CRON_SECRET})
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";

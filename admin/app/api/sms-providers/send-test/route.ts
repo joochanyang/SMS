@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/admin-session';
-import { requirePermission } from '@/lib/rbac';
+import { requirePermission, requireRole } from '@/lib/rbac';
+import { requireSudo } from '@/lib/sudo';
 import { logAdminAction } from '@/lib/audit';
 import { getProviderByName } from '@shared/sms-providers/router';
 import type { SmsProviderName } from '@shared/sms-providers/types';
 
 // ---------------------------------------------------------------------------
 // POST /api/sms-providers/send-test — 프로바이더 테스트 발송 (1건)
+// SUPER_ADMIN only, sudo 재인증 필수 (실제 과금 발생)
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
   try {
     const admin = await requireAuth(request);
+    requireRole(admin, 'SUPER_ADMIN');
     requirePermission(admin, 'setting:update');
+    await requireSudo(request, admin);
 
     const body = await request.json();
     const { provider: providerName, to, message } = body;

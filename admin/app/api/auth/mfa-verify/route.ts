@@ -55,6 +55,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '세션이 만료되었습니다.' }, { status: 401 });
     }
 
+    // IP 바인딩 검사: 세션 생성 시 IP와 현재 IP가 일치해야 함
+    if (session.ipAddress !== ip) {
+      await prisma.adminSession.delete({ where: { id: session.id } });
+      return NextResponse.json({ error: '세션이 유효하지 않습니다. 다시 로그인하세요.' }, { status: 401 });
+    }
+
+    // 관리자 계정 상태 검사: 로그인 후 비활성화된 경우 차단
+    if (session.admin.status !== 'ACTIVE') {
+      await prisma.adminSession.delete({ where: { id: session.id } });
+      return NextResponse.json({ error: '계정이 비활성화되었습니다.' }, { status: 403 });
+    }
+
     // Parse body
     const body = await request.json();
     const parsed = verifySchema.safeParse(body);

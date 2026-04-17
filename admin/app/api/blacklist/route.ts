@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     const entry = await prisma.blacklist.create({
       data: {
-        phoneNumber: maskPhone(phoneNumber),
+        phoneNumber,
         phoneHash,
         type,
         reason,

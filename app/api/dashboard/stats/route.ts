@@ -70,10 +70,11 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // overview 계산
+    // overview 계산 — CANCELLED 로그는 환불 처리되므로 totalSent/totalSpent 집계에서 제외
     const statusMap: Record<string, number> = {};
     let totalSpent = 0;
     for (const s of statusCounts) {
+      if (s.status === 'CANCELLED') continue;
       statusMap[s.status] = s._count.id;
       totalSpent += Number(s._sum.cost ?? 0);
     }

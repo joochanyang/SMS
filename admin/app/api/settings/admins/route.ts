@@ -98,8 +98,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check duplicate
-    const existing = await prisma.adminUser.findUnique({ where: { username: email } });
+    // Check duplicate by username OR email (username is unique, email column is not)
+    const existing = await prisma.adminUser.findFirst({
+      where: { OR: [{ username: email }, { email }] },
+      select: { id: true },
+    });
     if (existing) {
       return NextResponse.json({ error: '이미 등록된 계정입니다.' }, { status: 409 });
     }

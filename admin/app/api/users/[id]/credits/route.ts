@@ -70,6 +70,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     const { unit, amount, count, type, reason, idempotencyKey } = parsed.data;
 
+    // 타입과 부호 일관성 검증: ADMIN_ADD는 양수, ADMIN_DEDUCT는 음수여야 함
+    if (unit === 'KRW' && amount !== undefined) {
+      if (type === 'ADMIN_ADD' && amount < 0) {
+        return NextResponse.json(
+          { error: 'ADMIN_ADD 유형은 양수 금액이어야 합니다. 차감은 ADMIN_DEDUCT 유형을 사용하세요.' },
+          { status: 400 },
+        );
+      }
+      if (type === 'ADMIN_DEDUCT' && amount > 0) {
+        return NextResponse.json(
+          { error: 'ADMIN_DEDUCT 유형은 음수 금액이어야 합니다. 지급은 ADMIN_ADD 유형을 사용하세요.' },
+          { status: 400 },
+        );
+      }
+    }
+
     // Generate idempotency key if not provided
     const idemKey = idempotencyKey ?? crypto.randomUUID();
 
