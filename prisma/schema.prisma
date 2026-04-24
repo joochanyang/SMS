@@ -51,7 +51,7 @@ model SmsCampaign {
 
   costPerMessage  Decimal  @default(14) @db.Decimal(12, 4)
   estimatedCost   Decimal  @default(0)    @db.Decimal(12, 4)
-  dynamicBatchSize Int     @default(200)
+  dynamicBatchSize Int?
   tempFailureStreak Int    @default(0)
   cooldownUntil   DateTime?
   scheduledAt     DateTime?

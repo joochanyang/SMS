@@ -193,13 +193,15 @@ export class TxgProvider implements SmsProvider {
   ): Promise<SmsSendResult[]> {
     const numbers = messages.map((m) => m.to).join(',');
 
-    const body = {
+    const pushurl = process.env.TXG_DLR_WEBHOOK_URL;
+    const body: Record<string, unknown> = {
       ...this.authParams,
       numbers,
       content: messages[0].text,
       smstype: 0,
       sender: '', // 업체 요청: Sender ID 지원 안하므로 빈 값으로 설정
     };
+    if (pushurl) body.pushurl = pushurl;
 
     try {
       const res = await fetch(`${this.baseUrl}/sendsms`, {
@@ -242,10 +244,12 @@ export class TxgProvider implements SmsProvider {
       sender: '', // 업체 요청: Sender ID 비우기
     }));
 
-    const body = {
+    const pushurl = process.env.TXG_DLR_WEBHOOK_URL;
+    const body: Record<string, unknown> = {
       ...this.authParams,
       smsarray,
     };
+    if (pushurl) body.pushurl = pushurl;
 
     try {
       const res = await fetch(`${this.baseUrl}/sendsms`, {

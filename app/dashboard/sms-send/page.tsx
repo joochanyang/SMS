@@ -8,8 +8,6 @@ import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, BookU
 
 type RecipientWithVars = { phone: string; name?: string; nickname?: string };
 
-const DEFAULT_BATCH_SIZE = 200;
-
 const GSM7_CHARS = new Set(
   '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
   'ÄÖÑÜabcdefghijklmnopqrstuvwxyzäöñüà§ÆæßÉ{|}~[\\]^€'
@@ -240,7 +238,7 @@ export default function SmsSendPage() {
         const processRes = await fetch(`/api/sms/campaign/${campaignId}/process`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ batchSize: DEFAULT_BATCH_SIZE }),
+            body: JSON.stringify({}),
         });
         const processData = await processRes.json();
 
