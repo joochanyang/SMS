@@ -16,7 +16,7 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
  * All other paths require a valid admin_session cookie.
  */
 
-const PUBLIC_PATHS = ['/login', '/mfa-verify', '/mfa-setup', '/api/auth/'];
+const PUBLIC_PATHS = ['/login', '/mfa-verify', '/mfa-setup', '/api/auth/', '/api/health'];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
