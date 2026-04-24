@@ -33,13 +33,11 @@ function safeCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-type TxgReportEvent = [
-  id: number | string,
-  number: string,
-  time: number,
-  sendStatus: number,
-  deliverStatus?: number,
-];
+// TXG는 push DLR과 /getreport에서 동일 array 포맷을 사용한다고 명시했으나,
+// 실제 push DLR이 도착한 적이 없어 정확한 포맷은 미확인 상태.
+// /getreport 실측 포맷: [id, number, time, sendStatus, sendStatusLabel, deliverTime?, deliverStatus?]
+// 안전을 위해 두 가지 포맷 모두 수용하도록 unknown[]으로 받고 길이로 분기한다.
+type TxgReportEvent = unknown[];
 
 export async function PUT(req: NextRequest) {
   try {
@@ -86,7 +84,13 @@ export async function PUT(req: NextRequest) {
 
     for (const event of events) {
       if (!Array.isArray(event) || event.length < 4) continue;
-      const [id, , , sendStatus, deliverStatus] = event;
+      // 두 가지 포맷 호환:
+      //   5필드: [id, number, time, sendStatus, deliverStatus?]
+      //   7필드: [id, number, time, sendStatus, sendStatusLabel, deliverTime, deliverStatus]
+      // 길이로 분기하여 deliverStatus 인덱스를 결정.
+      const id = event[0];
+      const sendStatus = event[3];
+      const deliverStatus = event.length >= 7 ? event[6] : event[4];
       if (id == null) continue;
 
       const messageId = String(id);

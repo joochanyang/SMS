@@ -17,10 +17,10 @@ import {
   type TxgReportResult,
 } from "@/lib/sms-providers/txg";
 
-// 상한/청크 크기 — getreport는 ids 쿼리 파라미터이므로 URL 길이 보호 차원에서 500건 단위로 끊는다.
+// 상한/청크 크기 — TXG /getreport는 ids 한 번에 200개까지만 허용 (실측: 300개 이상이면 status=-7 "ids to many").
 const POLL_WINDOW_MS = 24 * 60 * 60 * 1000; // 최근 24시간
 const MAX_POLL_TARGETS = 5000; // 단일 실행에서 폴링할 최대 로그 수
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 200;
 // 5분 주기 × 12회 = 60분. 60분간 TXG DLR이 종결 상태를 주지 않으면 "전달 불가 판정 불가능"으로 간주하여
 // FAILED + providerStatus=DELIVERY_UNKNOWN으로 종결 (좀비 SENT 박제 방지).
 const MAX_POLL_ATTEMPTS = 12;
@@ -159,7 +159,9 @@ export async function POST(req: NextRequest) {
 
       for (const event of report.array) {
         if (!Array.isArray(event) || event.length < 4) continue;
-        const [id, , , sendStatus, deliverStatus] = event;
+        // TXG /getreport 실제 응답 포맷: [id, number, sendTime, sendStatus, sendStatusLabel, deliverTime, deliverStatus]
+        // (코드 주석의 5필드 가정과 달리 실제는 7필드 — index 6이 deliverStatus)
+        const [id, , , sendStatus, , , deliverStatus] = event;
         if (id == null) continue;
 
         const messageId = String(id);

@@ -133,6 +133,13 @@ export function mapTxgEventToStatus(
 
 /**
  * TXG-TEL getreport 응답 타입
+ *
+ * 실측 array 포맷 (2026-04-24 확인):
+ *   [id, number, sendTime, sendStatus, sendStatusLabel, deliverTime?, deliverStatus?]
+ *   예: [6397575, "+821028855838", 20260424180931, 0, "success", 20260424180934, 3]
+ *
+ * 주의: 코드 주석에 "5필드"로 적혀있던 것은 부정확. 실제는 7필드이며
+ * deliverStatus는 index 6 (마지막 위치).
  */
 export interface TxgReportResult {
   status: number;
@@ -141,8 +148,13 @@ export interface TxgReportResult {
   unsent?: number;
   sending?: number;
   nofound?: number;
-  /** [[id, number, sendTime, sendStatus, deliverStatus?], ...] */
-  array?: Array<[number, string, number, number, number?]>;
+  deliverSuc?: number;
+  deliverFail?: number;
+  deliverTimeout?: number;
+  /** [[id, number, sendTime, sendStatus, sendStatusLabel, deliverTime?, deliverStatus?], ...] */
+  array?: Array<
+    [number, string, number, number, string?, number?, number?]
+  >;
 }
 
 export class TxgProvider implements SmsProvider {
