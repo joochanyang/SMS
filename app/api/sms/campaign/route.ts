@@ -255,7 +255,6 @@ export async function POST(req: NextRequest) {
           totalRecipients: filteredRecipients.length,
           costPerMessage: costPerMessage,
           estimatedCost,
-          dynamicBatchSize: SMS_POLICY.maxBatchSize,
           tempFailureStreak: 0,
           ...(scheduledAt && { scheduledAt }),
         },
