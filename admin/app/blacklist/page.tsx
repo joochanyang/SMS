@@ -7,6 +7,7 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -113,6 +114,8 @@ export default function BlacklistPage() {
     }
   }
 
+  const canManageBlacklist = admin ? hasPermission(admin.role, 'blacklist:manage') : false;
+
   const columns: Column<BlacklistEntry>[] = [
     { key: 'phoneNumber', label: '전화번호', render: (row) => <span style={{ fontFamily: 'monospace' }}>{row.phoneNumber}</span> },
     { key: 'type', label: '유형', render: (row) => <span className="badge badge-muted">{row.type}</span> },
@@ -121,21 +124,20 @@ export default function BlacklistPage() {
     { key: 'createdAt', label: '등록일', render: (row) => new Date(row.createdAt).toLocaleDateString('ko-KR') },
     {
       key: 'actions', label: '', width: '60px',
-      render: (row) => (
+      render: (row) => canManageBlacklist ? (
         <button className="btn btn-outline-danger btn-xs" onClick={(e) => {
           e.stopPropagation();
           setRemoveModal({ open: true, id: row.id, phone: row.phoneNumber });
         }}>
           <Trash2 size={12} />
         </button>
-      ),
+      ) : null,
     },
   ];
 
   if (!admin) {
     return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
   }
-
   return (
     <div className="admin-layout">
       <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
@@ -150,7 +152,7 @@ export default function BlacklistPage() {
               <option value="INVALID">무효</option>
               <option value="DNC">수신거부</option>
             </select>
-            <button className="btn btn-primary btn-sm" onClick={() => setAddModal(true)}>
+            <button className="btn btn-primary btn-sm" onClick={() => setAddModal(true)} disabled={!canManageBlacklist}>
               <Plus size={14} /> 번호 추가
             </button>
           </div>
@@ -174,7 +176,7 @@ export default function BlacklistPage() {
       </div>
 
       {/* Add Modal */}
-      {addModal && (
+      {addModal && canManageBlacklist && (
         <div className="modal-overlay" onClick={() => setAddModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
             <h3 style={{ marginBottom: '16px' }}>블랙리스트 추가</h3>
@@ -209,7 +211,7 @@ export default function BlacklistPage() {
 
       {/* Remove Modal */}
       <ConfirmModal
-        isOpen={removeModal.open}
+        isOpen={removeModal.open && canManageBlacklist}
         onClose={() => { setRemoveModal({ open: false, id: '', phone: '' }); setRemoveReason(''); }}
         onConfirm={handleRemove}
         title="블랙리스트 제거"

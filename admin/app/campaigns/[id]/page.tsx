@@ -7,6 +7,7 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -137,6 +138,7 @@ export default function CampaignDetailPage() {
   const progress = campaign && campaign.totalRecipients > 0
     ? (campaign.deliveredCount / campaign.totalRecipients) * 100
     : 0;
+  const canStopCampaign = hasPermission(admin.role, 'campaign:stop');
 
   return (
     <div className="admin-layout">
@@ -161,7 +163,7 @@ export default function CampaignDetailPage() {
                       <span className="badge-dot" />
                       {statusLabels[campaign.status] ?? campaign.status}
                     </span>
-                    {(campaign.status === 'SENDING' || campaign.status === 'QUEUED') && (
+                    {canStopCampaign && (campaign.status === 'SENDING' || campaign.status === 'QUEUED') && (
                       <button className="btn btn-outline-danger btn-sm" onClick={() => setStopModal(true)}>
                         <StopCircle size={14} /> 긴급 중지
                       </button>

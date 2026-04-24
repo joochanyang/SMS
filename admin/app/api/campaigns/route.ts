@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -15,23 +16,14 @@ function maskEmail(email: string): string {
   return `${masked}@${domain}`;
 }
 
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] campaigns:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
 
 const querySchema = z.object({
-  status: z.enum(['DRAFT', 'QUEUED', 'SENDING', 'COMPLETED', 'CANCELLED', 'FAILED']).optional(),
+  search: z.string().trim().min(1).optional(),
+  status: z.enum(['DRAFT', 'QUEUED', 'SENDING', 'COMPLETED', 'CANCELLED', 'FAILED', 'STOPPED']).optional(),
   userId: z.string().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
@@ -61,12 +53,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { status, userId, dateFrom, dateTo, sortBy, sortOrder, page, limit } = parsed.data;
+    const { search, status, userId, dateFrom, dateTo, sortBy, sortOrder, page, limit } = parsed.data;
 
     const where: any = {};
 
-    if (status) where.status = status;
+    if (status) where.status = status === 'STOPPED' ? 'CANCELLED' : status;
     if (userId) where.userId = userId;
+    if (search) {
+      where.OR = [
+        { messageBody: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { user: { name: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
 
     if (dateFrom || dateTo) {
       where.createdAt = {};
@@ -109,6 +109,6 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.max(1, Math.ceil(total / limit));
     return NextResponse.json({ campaigns: masked, total, totalPages, page, limit });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'campaigns');
   }
 }

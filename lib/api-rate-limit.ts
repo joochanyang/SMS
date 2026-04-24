@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, type RateLimitResult } from "./rate-limiter";
+import { getClientIp } from "./client-ip";
 
 interface RateLimitConfig {
   /** 분당 최대 요청 수 */
@@ -16,24 +17,6 @@ interface RateLimitConfig {
 interface RateLimitCheckResult {
   allowed: boolean;
   response?: NextResponse;
-}
-
-/**
- * 클라이언트 IP 추출
- * x-forwarded-for > x-real-ip > fallback
- */
-function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) {
-    // x-forwarded-for 목록에서 마지막 IP 사용 (리버스 프록시가 추가한 신뢰 가능한 IP)
-    const ips = forwarded.split(",").map(ip => ip.trim());
-    return ips[ips.length - 1];
-  }
-
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-
-  return "unknown";
 }
 
 /**
@@ -53,7 +36,7 @@ export async function withRateLimit(
   req: NextRequest,
   config: RateLimitConfig,
 ): Promise<RateLimitCheckResult> {
-  const ip = getClientIp(req);
+  const ip = getClientIp(req, 'trusted');
   const path = req.nextUrl.pathname;
   const keyPrefix = `${path}:${ip}`;
 

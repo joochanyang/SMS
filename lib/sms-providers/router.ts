@@ -7,10 +7,12 @@ import { prisma } from '../prisma';
 import type { SmsProvider, SmsProviderName } from './types';
 import { InfobipProvider } from './infobip';
 import { SmsToProvider } from './smsto';
+import { TxgProvider } from './txg';
 
 const PROVIDERS: Record<SmsProviderName, () => SmsProvider> = {
   infobip: () => new InfobipProvider(),
   smsto: () => new SmsToProvider(),
+  txg: () => new TxgProvider(),
 };
 
 /**

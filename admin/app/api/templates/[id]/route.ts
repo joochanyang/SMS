@@ -4,21 +4,8 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { handleApiError } from '@shared/api-error';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] templates/[id]:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -54,7 +41,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     return NextResponse.json({ template });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'templates/[id]');
   }
 }
 
@@ -127,6 +114,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       message: action === 'APPROVE' ? '템플릿이 승인되었습니다.' : '템플릿이 거절되었습니다.',
     });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'templates/[id]');
   }
 }

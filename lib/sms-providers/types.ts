@@ -21,7 +21,7 @@ export interface SmsProviderBalance {
   currency: string;
 }
 
-export type SmsProviderName = 'infobip' | 'smsto';
+export type SmsProviderName = 'infobip' | 'smsto' | 'txg';
 
 export interface SmsProvider {
   readonly name: SmsProviderName;

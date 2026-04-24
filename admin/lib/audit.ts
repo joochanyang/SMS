@@ -29,17 +29,13 @@ export interface AuditParams {
   metadata?: any;
 }
 
+import { getClientIp } from '@shared/client-ip';
+
 /**
- * Extract client IP from the request.
- * Checks x-forwarded-for, x-real-ip, then falls back to 'unknown'.
+ * Audit 로그용 — 원본 클라이언트 주장 IP(X-Forwarded-For의 첫 번째).
  */
 function extractIp(req: NextRequest): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    // x-forwarded-for may contain multiple IPs; take the first (client)
-    return forwarded.split(',')[0].trim();
-  }
-  return req.headers.get('x-real-ip') ?? 'unknown';
+  return getClientIp(req, 'claimed');
 }
 
 /**

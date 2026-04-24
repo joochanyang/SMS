@@ -66,12 +66,43 @@ function formatDev(entry: LogEntry): string {
   return `${color}${entry.level.toUpperCase().padEnd(5)}${RESET} ${entry.timestamp}${tag}${user}${campaign} ${entry.message}${err}${meta}`;
 }
 
+// 파일 싱크: LOG_FILE_PATH 설정 시 JSON Lines 추가 기록 (Loki/Promtail 수집용).
+// Edge/browser 환경에서는 require 실패 시 무시됨.
+let fileStream: NodeJS.WritableStream | null = null;
+let fileStreamInitAttempted = false;
+
+function getFileStream(): NodeJS.WritableStream | null {
+  if (fileStreamInitAttempted) return fileStream;
+  fileStreamInitAttempted = true;
+
+  const filePath = process.env.LOG_FILE_PATH;
+  if (!filePath) return null;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("node:path") as typeof import("node:path");
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fileStream = fs.createWriteStream(filePath, { flags: "a" });
+    fileStream.on("error", (err) => {
+      console.error("[logger] 파일 싱크 오류:", err);
+      fileStream = null;
+    });
+  } catch (err) {
+    console.error("[logger] 파일 싱크 초기화 실패:", err);
+    fileStream = null;
+  }
+  return fileStream;
+}
+
 function emit(level: LogLevel, message: string, data?: Partial<LogEntry>): void {
   if (!shouldLog(level)) return;
 
   const entry = buildEntry(level, message, data);
   const isDev = process.env.NODE_ENV !== "production";
-  const output = isDev ? formatDev(entry) : JSON.stringify(entry);
+  const json = JSON.stringify(entry);
+  const output = isDev ? formatDev(entry) : json;
 
   if (level === "error") {
     console.error(output);
@@ -79,6 +110,11 @@ function emit(level: LogLevel, message: string, data?: Partial<LogEntry>): void 
     console.warn(output);
   } else {
     console.log(output);
+  }
+
+  const stream = getFileStream();
+  if (stream) {
+    stream.write(json + "\n");
   }
 }
 

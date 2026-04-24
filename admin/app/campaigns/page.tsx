@@ -7,6 +7,7 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface CampaignRow {
   id: string;
@@ -26,19 +27,21 @@ interface AdminInfo {
 }
 
 const statusLabels: Record<string, string> = {
+  QUEUED: '대기열',
   SENDING: '발송 중',
   COMPLETED: '완료',
   FAILED: '실패',
-  STOPPED: '중지',
+  CANCELLED: '중지',
   DRAFT: '대기',
   PENDING: '대기',
 };
 
 const statusClasses: Record<string, string> = {
+  QUEUED: 'badge-pending',
   SENDING: 'badge-sending',
   COMPLETED: 'badge-success',
   FAILED: 'badge-failed',
-  STOPPED: 'badge-warning',
+  CANCELLED: 'badge-warning',
   DRAFT: 'badge-draft',
   PENDING: 'badge-pending',
 };
@@ -111,6 +114,8 @@ export default function CampaignsPage() {
       setStopLoading(false);
     }
   }
+
+  const canStopCampaigns = admin ? hasPermission(admin.role, 'campaign:stop') : false;
 
   const columns: Column<CampaignRow>[] = [
     {
@@ -188,7 +193,7 @@ export default function CampaignsPage() {
       label: '',
       width: '80px',
       render: (row) =>
-        row.status === 'SENDING' ? (
+        canStopCampaigns && (row.status === 'SENDING' || row.status === 'QUEUED') ? (
           <button
             className="btn btn-outline-danger btn-xs"
             onClick={(e) => {
@@ -244,6 +249,7 @@ export default function CampaignsPage() {
             >
               <option value="ALL">전체 상태</option>
               <option value="SENDING">발송 중</option>
+              <option value="QUEUED">대기열</option>
               <option value="COMPLETED">완료</option>
               <option value="FAILED">실패</option>
               <option value="STOPPED">중지</option>

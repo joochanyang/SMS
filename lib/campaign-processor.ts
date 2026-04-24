@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
+import { logger, toLogError } from "@/lib/logger";
 import { getActiveProvider } from "@/lib/sms-providers/router";
 import {
   getRetryDelayMs,
@@ -242,7 +243,7 @@ export async function processCampaignBatch(
       }))
     );
   } catch (e) {
-    console.error(`[${provider.name}] 배치 발송 오류:`, e);
+    logger.error(`[${provider.name}] 배치 발송 오류`, { error: toLogError(e) });
 
     // 일시 장애 — 재시도 대기열로 이동
     await prisma.$transaction(async (tx) => {
@@ -254,6 +255,7 @@ export async function processCampaignBatch(
             data: {
               status: "FAILED",
               retryCount: nextRetry,
+              providerName: provider.name,
               providerError: "배치 발송 실패 (최대 재시도 초과)",
             },
           });
@@ -270,6 +272,7 @@ export async function processCampaignBatch(
             data: {
               status: "RETRY_PENDING",
               retryCount: nextRetry,
+              providerName: provider.name,
               providerError: "배치 발송 일시 장애",
               nextRetryAt: new Date(
                 Date.now() + getRetryDelayMs(log.retryCount),
@@ -327,6 +330,7 @@ export async function processCampaignBatch(
         where: { id: sendableLogs[i].id },
         data: {
           messageId: typeof messageId === "string" ? messageId : null,
+          providerName: provider.name,
           providerStatus: String(providerStatus),
           status: nextStatus,
           retryCount: tempError ? log.retryCount + 1 : log.retryCount,

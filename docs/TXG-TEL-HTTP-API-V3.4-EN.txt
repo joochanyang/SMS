@@ -1,0 +1,1190 @@
+HTTP DEVELOPMENT SPEC
+
+Note: the encoding format of this interface: utf8.
+
+1.
+
+Get balance
+HTTP get supported to obtain the balance of the corresponding account in the
+system. Data of query(The body segment of the HTTP message)is a JSON array composed
+by one or more task. Parameter Content-Type in HTTP head should set to
+“application/json;charset=utf-8”.
+Method of calling：
+http://8.219.42.83:20003/getbalance?account=***&pas
+sword=***
+Input parameter:
+Parameter
+
+Description
+
+Required
+
+Date type
+
+version
+
+Protocol version number
+
+N(default 1.0)
+
+String
+
+account
+
+Account
+
+Y
+
+String
+
+password
+
+Password
+
+Y
+
+String
+
+seq
+
+Serial number ， increments per
+
+Must be filled
+
+Int
+
+request，the initial value is 1
+
+when the server
+requires
+encryption
+
+time
+
+The timestamp form which the
+
+Must be filled
+
+request was mode
+
+when the server
+
+Int
+
+requires
+encryption
+Output parameter：
+Parameter
+
+Description
+
+Data type
+
+status
+
+Query status 0：
+
+INT
+
+query success
+-1：authentication error
+-2：Ip limited access
+balance
+
+The balance of the actual account
+
+String
+
+gift
+
+Complimentary account balance
+
+String
+
+Reply sample：
+{“status”:0, "balance":"99.990000", "gift":"50.00000"}
+
+2.
+
+Send sms
+Support HTTP get or post for send sms messages. Get sends up to 100 numbers
+at a time. And post can submit up to 10000 numbers at once.
+Submited results date (the body segment of the HTTP messages) is a JSON array
+conposed by one or more task. Patameter content-type in http head should set to
+“application/json;charset=utf-8”.
+
+1. HTTP GET method calling：
+http://8.219.42.83:20003/sendsms?account=***&password=***&smstype=0&numbers=
+10010,
+1008611&content=***&mmstitle=mmstitle_text
+2. Http post method calling：(Notes：need put the all parameters on the body as json)
+http://8.219.42.83:20003/sendsms
+body:{"account":"chenkc","password":"123456","content":"test","smstype":0,"m
+mstitle":"mmstitle decs"，"numbers":"123456"}
+3. Http post method calling: (Use the sms array pass multiple numbers,Content of
+multiple text message)
+http://8.219.42.83:20003/sendsms
+body:{"account":"chenkc","password":"123456","smsarray":[
+{"content":"***","smstype":0,"mmstitle":"***","numbers":"***","sender":"**
+*"},{"content":"***","smstype":0,"mmstitle":"***","numbers":"****,****"},
+...
+{"content1":"***","smstype":0,"mmstitle":"***","numbers":"****"}
+]}
+Notes: Need to put all the parameter in the body as json.
+Input parameter：
+Parameter
+
+Description
+
+Required
+
+Data type
+
+version
+
+Protocal version number
+
+N(default 1.0)
+
+String
+
+account
+
+Account
+
+Y
+
+String
+
+password
+
+Password
+
+Y
+
+String
+
+seq
+
+Serial number ， increments per
+
+Must be filled
+
+Int
+
+request，the initial value is 1
+
+when the server
+
+requires
+encryption
+time
+
+The timestamp form which the
+
+Must be filled
+
+request was mode
+
+when the server
+
+Int
+
+requires
+encryption
+smstype
+
+Sms type(0:SMS, 1:MMS)
+
+N（default0）
+
+Int
+
+mmstitle
+
+MMS title（get mode need to be done
+
+N
+
+String
+
+String
+
+urlEncode）
+sender
+
+Sender
+
+N
+
+numbers
+
+Sms receiving number,separated
+
+Y
+
+by English comma between multiple
+Numbers(get up to 100,post up to
+10000)
+content
+
+Send
+
+content （ need
+
+to
+
+do
+
+Y
+
+urlEncode）
+
+String
+
+the
+
+length
+should
+
+not
+
+exceed 1024
+sendtime
+
+Timed delivery time （ empty is
+
+N
+
+String（14）
+
+immediately sent）
+For example :
+20171001123015,which
+
+means
+
+october 1,2017,12:30 minutes and
+15 seconds
+Output parameter：
+Parameter
+
+Description
+
+Data type
+
+status
+
+Send submission status
+
+INT
+
+0：query success
+-1：authentication error
+-2：Ip limited access
+-3：SMS contain sensitive characters
+-4：SMS contain is empty
+-5：SMS contain is too long
+-6：Not a template SMS
+-7：Over number
+-8：number is empty
+-9：Abnormal number
+-10：The channel balance is insufficient to satisfy
+this transmission
+-11：The time is wrong
+-12 ： Because of the platform , batch commit
+error,please contact the administrator
+-13: User locked
+
+success
+
+The number of successful submissions
+
+INT
+
+fail
+
+The number of failure submissions
+
+INT
+
+array
+
+The array of successful sms submission
+The array contains the “number and number of the
+sending result query ID”,which is numeric
+characters
+
+Note：after the submissions of the SMS,the system will generate and id for the
+successful number, after that the consumer can query the sending result of the
+message according to this id.
+Reply simple：
+{"status":0, "success":2, "fail":0, "array":[[10010,1], [1008611,2]]}
+
+3.
+
+Get report
+HTTP get is Support to query the SMS sending status, and get sends up to 200
+
+numbers at once. Get report data (the body segment of the http message) is a JSON
+array composed by one or more task,parameter Content-Type in HTTP head should set
+to “application/json;charset=utf-8”.
+Note: December 31,2020, added support for getting reports delivered, the
+“EIMS_HTTP_GET_DELIVER_REPORT ” option can be turns off the function of deliver
+reports.
+Method of calling：
+http://8.219.42.83:20003/getreport?account=***&password=***&ids=1,2
+Input parameter：
+Parameter
+
+Description
+
+Required
+
+Dada type
+
+version
+
+Protocol version number
+
+N(default 1.0)
+
+String
+
+account
+
+Account
+
+Y
+
+String
+
+password
+
+Password
+
+Y
+
+String
+
+ids
+
+Specify the SMS id of the query
+
+Y
+
+String
+
+sending
+
+result
+
+(the
+
+id
+
+is
+
+returned by the system at the time
+of submission), and multiple
+Numbers are separated by English
+commas (up to 200)
+seq
+
+Serial number ， increments per
+
+Must
+
+be
+
+filled
+
+Int
+
+request，the initial value is 1
+
+when the server
+requires
+encryption
+
+time
+
+The timestamp form which the
+
+Must
+
+be
+
+filled
+
+request was mode
+
+when the server
+
+Int
+
+requires
+encryption
+ids
+
+Specify the SMS id of the query
+sending
+
+result
+
+(the
+
+id
+
+Y
+
+String
+
+is
+
+returned by the system at the time
+of submission), and multiple
+Numbers are separated by English
+commas (up to 200)
+Output parameter：
+Parameter
+
+Description
+
+Data type
+
+status
+
+Send submission status
+
+INT
+
+success
+
+The number of send successful
+
+INT
+
+fail
+
+The number of send failure
+
+INT
+
+unsent
+
+The number of unsend
+
+INT
+
+sending
+
+The number of sending
+
+INT
+
+Deliver Suc
+
+The number of deliver success
+
+INT
+
+Deliver fail
+
+The number of deliver failure
+
+INT
+
+Deliver Timeout
+
+The number of deliver timeout
+
+INT
+
+No found
+
+The number of number not found
+
+array
+
+An array of sms sending result
+An array of SMS sending results.
+The array contains the "status query ID, number,
+sending time, status" , all of which are numeric
+characters.
+Send Status:
+0 sent successfully,
+1: unsent,
+2: sending,
+Non: sending failure.
+Deliver status:
+0: no reporting required
+1: sent but not yet delivered
+2: deliver failure
+3: deliver success
+4: deliver timeout
+5: other unknown status
+
+Note: after the submission of the text message, the system will generate an Id
+for the successful number. After that, the customer can query the sending result
+of the message according to this Id.
+Reply sample：
+{"status":0, "success":1, "fail":1, "unsent":0, "sending":0, "nofound":0,
+"array":[[1,10010,20171001123015,0], [2,1008611,20171001123015,3]]}
+Note: above-mentioned array [1,10010,20171001123015,0]，each field corresponds to
+the status query ID, number, sending time and status of the number.
+
+Status code
+
+English describe
+
+0
+
+success
+
+1001
+
+NoRoute
+
+1002
+
+NoChannel
+
+1003
+
+NoBablance
+
+1004
+
+Unkown
+
+1005
+
+Send Refuse
+
+1006
+
+Send Timeout
+
+1007
+
+Server Timeout
+
+1008
+
+SupplierMccMncLimit
+
+1009
+
+ConsumerMccMncLimit
+
+1010
+
+NoSupplier
+
+1011
+
+Black Number
+
+1012
+
+Sensitive Words
+
+1013
+
+Daliy Limit
+
+1014
+
+DestinationMccMncLimit
+
+1016
+
+SMS Template Limit
+
+1017
+
+SupplierNoBablance
+
+1018
+
+UserProfitLimit
+
+1019
+
+ChannelProfitLimit
+
+1020
+
+MccNumberLengthLimit
+
+1021
+
+Job no found
+
+1022
+
+china sms limit
+
+1023
+
+RouteMccMncLimit
+
+4.
+
+Get sms
+Support HTTP get to query the system to receive SMS, get sends up to 50 SMS
+
+messages. Get report data (The body segment of the HTTP message)is a JSON array
+composed by one or more task. Parameter Content-Type in HTTP head should set to
+
+“application/json;charset=utf-8”.
+Method of calling：
+http://8.219.42.83:20003/getsms?account=***&password=***&start_time=15435703
+02
+Input parameter：
+parameter
+
+Description
+
+Required
+
+Data type
+
+version
+
+Protocol version number
+
+N（default 1.0） String
+
+account
+
+Account
+
+Y
+
+String
+
+password
+
+Password
+
+Y
+
+String
+
+seq
+
+Serial number ， increments per
+
+Must be filled
+
+Int
+
+request，the initial value is 1
+
+when the server
+requires
+encryption
+
+time
+
+The timestamp form which the
+
+Must be filled
+
+request was mode
+
+when the server
+
+Int
+
+requires
+encryption
+Start_time
+
+The timestamp from which the
+
+N
+
+INT
+
+query began
+
+Output parameter：
+Parameter
+
+Description
+
+Type
+
+status
+
+Query request status
+
+INT
+
+0：Query success
+-1：Authentication error
+-2：IP limited access
+-3：SMS contain sensitive characters
+-4：SMS contain is empty
+-5：SMS contain is too long
+-6：Not a template SMS
+-7：Over number
+-8：Number is empty
+-9：Abnormal number
+-10：The channel balance is insufficient to satisfy
+this
+transmission
+-11：The timing is wrong
+-12：Because of the platform, batch commit error,
+please contact the administrator
+-13: User locked
+cnt
+
+receive SMS number of Query (a get request is not
+more than 50)
+
+INT
+
+array
+
+receive SMS number of Query (a get request is not
+more than 50)
+Note: the message content needs to be base64
+decoded to get the correct SMS content of utf8
+encoding;If you receive two SMS with the same id,
+it can be considered as a repeated receiving SMS.
+Once the customer has checked the received SMS,
+the second query will not return.
+
+Reply sample:
+{"status":0, "cnt":2, "array":[[1,10010,20171001123015, "********************************"],
+[2,1008611,20171001123015, "********************************"]]}
+
+5.
+
+Actively the push the report to customers url
+The url of the push report of consumer user can be
+
+configured on the system.
+
+After the system sends the message, The result of the SMS message will be pushed
+to the url specified by the customer in put mode,the contents of the report are
+placed in the body of the request in JSON ,push up to 50 report at one time.
+
+JOSN message format
+Parameter
+
+description
+
+Type
+
+type
+
+The string type of the message,，default：“report” STRING
+
+cnt
+
+The number of reports included in this push (no
+
+INT
+
+more than 50 more than one request)
+array
+
+An array of sms sending reports
+
+Array
+
+The array contains
+1、 id(the id returned when sent，Int)
+2、 Send number（String）
+3、 Send time（Int）
+4、 Send result（Int，0 succeed，non-0 failed）
+5、 Cause（String）
+
+Push sample：
+{"type":"report","cnt":2,"array":[[1,"1234545456",20180801123015,0,"success"],[2,"2
+356844545",20180801223015, 1, "no balance"]]}
+
+6.
+
+Create a SMS task to send message
+Support HTTP post to create the task of sending SMS.
+
+submitted result data (The body segment of the HTTP message)is a JSON array
+composed by one or more task. Parameter Content-Type in HTTP head should set to
+“application/json;charset=utf-8”.
+
+URL: http://8.219.42.83:20003/smsjob
+Body sample:
+1. Create an immediately sms task, the number is put on the number field.
+body:{"account":"chenkc","password":"123456","job":"job_with_number","numb
+ersrc":0,"numbers":"123456,3444,54535","content":"test"}
+
+2. Create an immediately sms task, the number field holds the URL of a number
+field.
+body:{"account":"chenkc","password":"123456","job":"job_with_number","nu
+mbersrc":1,"numbers":"http://ip:port/sms.xls","content":"test"}
+
+3. Create cycle of 10 sms task that trigger at 9am each day, the number fields
+holds the URL of a number field.
+body:{"account":"chenkc","password":"123456","job":"job_with_number","
+jobtype":3,"period":10,"hour":9,"min":0,"numbersrc":1,"numbers":"http://
+ip:port/sms.xls","content":"test"}
+Note: need to put all the parameter in the body as json, url file only supports
+xls,nonsupport xlsx.
+
+Input parameter
+Parameter
+
+Description
+
+Required
+
+Data type
+
+Note
+
+version
+
+Protocol version number
+
+N
+
+String
+
+Default 1.0
+
+account
+
+Accounts
+
+Y
+
+String
+
+password
+
+1、when the server is not
+
+Y
+
+String
+
+encrypted,is plaintext
+password.
+2 、 when the server is
+encrypted, is MD5 password
+Md5 price = md5
+(account+plaintext
+password+seq+time+key）
+The negotiated key offer
+By server
+
+seq
+
+Serial number:
+
+N
+
+Int
+
+incrementing per request
+
+Must be filled when the server
+Requires encryption
+
+The initial value is 1
+time
+
+The timestamp of the
+
+N
+
+Int
+
+Request initiation
+
+Must be filled when the server
+Requires encryption
+
+job
+
+Task name
+
+Y
+
+String
+
+jobtype
+
+Task type
+
+N
+
+Int
+
+Default 0
+
+N
+
+Int
+
+1、this calue only takes effect
+
+0: immediately
+1: timing
+2: interval
+3: daily
+4: weekly
+5: monthly
+period
+
+The number of cycles of a
+periodic task
+
+if the task type is greater
+than 2
+2、the default number of cycles
+for a periodic task is 1+ - both
+the period and the scheduled
+end time are empty
+
+interval
+
+How often does an interval
+
+N
+
+Int
+
+trigger an interval task
+
+When the task is 2 interval,
+It is required time unit:
+minutes
+
+min
+
+Min
+
+N
+
+Int
+
+1. Value range: 0-59
+2. Compulsory items for tasks
+of type 2-5
+
+hour
+
+Hour
+
+N
+
+Int
+
+3. Value range: 0-23
+4. Compulsory items for tasks
+of type 2-5
+
+day
+
+day
+
+N
+
+Int
+
+1、value range:1-31
+2、Compulsory items for tasks
+of type 2,3 and 5
+
+week
+
+week
+
+N
+
+Int
+
+1、value range:1-7
+2、compulsory items for tasks
+of type 4
+
+mon
+
+month
+
+N
+
+Int
+
+1、value range:1-12
+2、compulsory items for tasks
+of type 5
+
+planstarttm
+
+Schedule to send a
+
+N
+
+Int
+
+timestamp
+
+Scheduled to send a timestamp.
+Null mean to send immediately
+
+planendtm
+
+Scheduled end timestamp
+
+N
+
+Int
+
+Scheduled end timestamp
+
+retry
+
+The number of retries
+
+N
+
+Int
+
+The maxmum number of
+retry messages sent failed
+Default 0 does not resend
+
+flash
+
+Flash sms
+
+N
+
+Int
+
+is it a flash message
+0: NO
+1: Yes
+
+content
+
+SMS content
+
+N
+
+String
+
+Global SMS content
+
+Numbersrc
+
+Source number
+
+N
+
+INT
+
+0：numbers field is number
+1：numbers is a URL(file only
+Support xls,nonsupport xlsx)
+
+numbers
+
+Receive number
+
+N
+
+String
+
+Receive number for SMS
+1. The length not exceeding
+4*1024
+2. multiple numbers are
+separated by English commas
+
+SenderId
+
+Sender ID
+
+N
+
+String
+
+The sender Id of the task
+
+SMStype
+
+SMS type
+
+N
+
+Int
+
+0：SMS，1：MMS
+(default 0）
+
+MMStitle
+
+MMS title
+
+N
+
+String
+
+When the SMS type is MMS is
+required to fil
+
+Output parameter
+Parameter
+
+Description
+
+type
+
+status
+
+Query request status
+
+INT
+
+0：Query success
+-1：Authentication error
+-2：IP limited access
+-3：SMS contain sensitive characters
+-4：SMS contain is empty
+-5：SMS contain is too long
+-6：Not a template SMS
+-7：Over number
+-8：Number is empty
+-9：Abnormal number
+-10：The channel balance is insufficient to satisfy
+this
+transmission
+-11：The timing is wrong
+-12：Because of the platform, batch commit error,
+please contact the administrator
+-13: User locked
+-14：abnormal number source
+-15：task name abnormal，null or length greater than
+64
+
+-16：the SMS task type is abnormal
+-17：others mistake
+Jobid
+
+Reply sample：
+{"status":, "jobid":2}
+
+The ID value of the task was successfully created
+
+INT
+
+

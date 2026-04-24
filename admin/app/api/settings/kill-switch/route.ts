@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { requireSudo } from '@/lib/sudo';
 import { sendAlert } from '@/lib/notifications';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -16,22 +17,6 @@ const killSwitchSchema = z.object({
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.'),
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      const response: any = { error: err.message };
-      if ((err as any).requireSudo) response.requireSudo = true;
-      return NextResponse.json(response, { status });
-    }
-  }
-  console.error('[API] settings/kill-switch:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/settings/kill-switch — Current kill switch status
@@ -55,7 +40,7 @@ export async function GET(request: NextRequest) {
       updatedById: setting?.updatedById ?? null,
     });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/kill-switch');
   }
 }
 
@@ -197,6 +182,6 @@ export async function POST(request: NextRequest) {
       stoppedCampaigns,
     });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/kill-switch');
   }
 }

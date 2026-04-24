@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -15,20 +16,6 @@ const updateSettingSchema = z.object({
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.'),
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] settings:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/settings — All system settings grouped by category
@@ -59,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ settings: grouped });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings');
   }
 }
 
@@ -123,6 +110,6 @@ export async function PATCH(request: NextRequest) {
       },
     });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings');
   }
 }

@@ -70,23 +70,63 @@ function getTronHeaders(): Record<string, string> {
 }
 
 /**
+ * TronGrid/TronScan 호출용 재시도 래퍼.
+ * 네트워크 오류·5xx·429 에만 재시도. 4xx(401·403·404)은 즉시 반환.
+ * 지수 백오프: 400ms → 800ms → 1600ms (최대 3회 시도)
+ */
+async function fetchWithRetry(
+  input: string,
+  init?: RequestInit,
+  attempts = 3,
+): Promise<Response | null> {
+  const timeoutMs = 8000;
+  let lastErr: unknown = null;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(input, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      // 재시도 대상 상태코드: 5xx, 429
+      if (res.status >= 500 || res.status === 429) {
+        lastErr = new Error(`HTTP ${res.status}`);
+      } else {
+        return res;
+      }
+    } catch (err) {
+      lastErr = err;
+    }
+    if (i < attempts - 1) {
+      const backoff = 400 * 2 ** i;
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  logger.warn('[Tron] fetch 재시도 모두 실패', {
+    metadata: { url: input },
+    error: toLogError(lastErr),
+  });
+  return null;
+}
+
+/**
  * TXID로 트랜잭션 기본 정보 조회
  */
 async function getTransactionInfo(txid: string): Promise<TronTxInfo | null> {
   try {
-    const res = await fetch(`${TRONGRID_BASE}/wallet/gettransactioninfobyid`, {
+    const res = await fetchWithRetry(`${TRONGRID_BASE}/wallet/gettransactioninfobyid`, {
       method: 'POST',
       headers: { ...getTronHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: txid }),
     });
 
-    if (!res.ok) {
-      logger.error(`[TronGrid] getTransactionInfo failed: ${res.status}`);
+    if (!res || !res.ok) {
+      if (res) logger.error(`[TronGrid] getTransactionInfo failed: ${res.status}`);
       return null;
     }
 
     const data = await res.json();
-    
+
     // 비어있는 응답 = 트랜잭션 없음
     if (!data || !data.id) {
       return null;
@@ -106,13 +146,13 @@ async function getTransactionInfo(txid: string): Promise<TronTxInfo | null> {
 async function getTRC20TransferByTxid(txid: string, toAddress: string): Promise<TRC20Transfer | null> {
   try {
     // TronGrid의 account TRC20 transfer API 사용
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `${TRONGRID_BASE}/v1/accounts/${toAddress}/transactions/trc20?limit=200&only_to=true&contract_address=${USDT_CONTRACT}`,
       { headers: getTronHeaders() }
     );
 
-    if (!res.ok) {
-      logger.error(`[TronGrid] getTRC20Transfers failed: ${res.status}`);
+    if (!res || !res.ok) {
+      if (res) logger.error(`[TronGrid] getTRC20Transfers failed: ${res.status}`);
       return null;
     }
 
@@ -132,12 +172,12 @@ async function getTRC20TransferByTxid(txid: string, toAddress: string): Promise<
  */
 async function getTRC20TransferViaTronScan(txid: string): Promise<TRC20Transfer | null> {
   try {
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `https://apilist.tronscanapi.com/api/transaction-info?hash=${txid}`,
       { headers: { Accept: 'application/json' } }
     );
 
-    if (!res.ok) return null;
+    if (!res || !res.ok) return null;
 
     const data = await res.json();
     

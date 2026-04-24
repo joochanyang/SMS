@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,16 +20,6 @@ function maskEmail(email: string): string {
   return `${masked}@${domain}`;
 }
 
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] campaigns/[id]:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/campaigns/[id] — Campaign detail
@@ -102,6 +93,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       stats,
     });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'campaigns/[id]');
   }
 }

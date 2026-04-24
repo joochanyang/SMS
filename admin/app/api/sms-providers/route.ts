@@ -5,17 +5,9 @@ import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { getAllProviders, getProviderByName } from '@shared/sms-providers/router';
 import type { SmsProviderName } from '@shared/sms-providers/types';
+import { handleApiError } from '@shared/api-error';
 
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] sms-providers:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
+const VALID_PROVIDER_NAMES: SmsProviderName[] = ['infobip', 'smsto', 'txg'];
 
 // ---------------------------------------------------------------------------
 // GET /api/sms-providers — 프로바이더 목록 + 활성 프로바이더 조회
@@ -45,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ providers, activeProvider });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'sms-providers');
   }
 }
 
@@ -68,8 +60,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const validNames: SmsProviderName[] = ['infobip', 'smsto'];
-    if (!validNames.includes(provider)) {
+    if (!VALID_PROVIDER_NAMES.includes(provider)) {
       return NextResponse.json(
         { error: '유효하지 않은 프로바이더입니다.' },
         { status: 400 },
@@ -119,6 +110,6 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, activeProvider: provider });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'sms-providers');
   }
 }

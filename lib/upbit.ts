@@ -17,15 +17,17 @@ interface UpbitTicker {
   timestamp: number;
 }
 
-// 서버 사이드 시세 캐시 (5초 TTL)
+// 서버 사이드 시세 캐시 (5초 TTL, stale 허용 최대 5분)
 let cachedTicker: {
   price: number;
   changeRate: number;
   changePrice: number;
   volume24h: number;
   timestamp: number;
+  fetchedAt: number;
 } | null = null;
 const CACHE_TTL_MS = 5000;
+const TICKER_MAX_STALENESS_MS = 5 * 60 * 1000; // 5분
 
 /**
  * Upbit REST API로 USDT/KRW 현재가 조회
@@ -38,9 +40,10 @@ export async function getUsdtKrwPrice(): Promise<{
   volume24h: number;
   timestamp: number;
 }> {
-  // 캐시 체크
-  if (cachedTicker && Date.now() - cachedTicker.timestamp < CACHE_TTL_MS) {
-    return { ...cachedTicker };
+  // 캐시 체크 (fetchedAt 기준)
+  if (cachedTicker && Date.now() - cachedTicker.fetchedAt < CACHE_TTL_MS) {
+    const { fetchedAt: _fa, ...rest } = cachedTicker;
+    return rest;
   }
 
   try {
@@ -67,15 +70,19 @@ export async function getUsdtKrwPrice(): Promise<{
       changePrice: ticker.signed_change_price,
       volume24h: ticker.acc_trade_volume_24h,
       timestamp: ticker.timestamp,
+      fetchedAt: Date.now(),
     };
 
-    return { ...cachedTicker };
+    const { fetchedAt: _fa, ...rest } = cachedTicker;
+    return rest;
   } catch (error) {
-    // 캐시된 값이 있으면 오래되더라도 반환 (fallback)
-    if (cachedTicker) {
+    // 캐시가 있고 staleness 한도(5분) 이내면 stale 반환
+    if (cachedTicker && Date.now() - cachedTicker.fetchedAt < TICKER_MAX_STALENESS_MS) {
       logger.warn('[Upbit] REST API failed, using stale cache', { error: toLogError(error) });
-      return { ...cachedTicker };
+      const { fetchedAt: _fa, ...rest } = cachedTicker;
+      return rest;
     }
+    // 한도 초과 또는 캐시 없음 → 거부
     throw error;
   }
 }
@@ -85,7 +92,7 @@ export async function getUsdtKrwPrice(): Promise<{
 // ---------------------------------------------------------------------------
 
 const EXCHANGE_RATE_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
-const EXCHANGE_RATE_MAX_STALENESS_MS = 60 * 60 * 1000; // 1시간
+const EXCHANGE_RATE_MAX_STALENESS_MS = 5 * 60 * 1000; // 5분 staleness 상한
 const FALLBACK_EXCHANGE_RATE = 1380;
 
 let exchangeRateCache: {
@@ -143,9 +150,9 @@ export async function getKrwUsdRate(): Promise<number> {
       return FALLBACK_EXCHANGE_RATE;
     }
 
-    // 캐시가 1시간 초과 → 에러
+    // 캐시가 5분 초과 → 에러
     throw new Error(
-      "환율 정보를 가져올 수 없습니다. 마지막 조회가 1시간을 초과했습니다.",
+      "환율 정보를 가져올 수 없습니다. 마지막 조회가 5분을 초과했습니다.",
     );
   }
 }

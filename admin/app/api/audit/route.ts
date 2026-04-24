@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, isRoleAtLeast } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -21,20 +22,6 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] audit:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/audit — Audit log query
@@ -123,6 +110,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ logs, total, page, limit });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'audit');
   }
 }

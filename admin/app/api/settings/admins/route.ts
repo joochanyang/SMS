@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, requireRole } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -17,20 +18,6 @@ const createAdminSchema = z.object({
   role: z.enum(['ADMIN', 'SUPPORT', 'VIEWER']),
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] settings/admins:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/settings/admins — List admin users
@@ -63,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ admins });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/admins');
   }
 }
 
@@ -140,6 +127,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ admin: newAdmin }, { status: 201 });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/admins');
   }
 }

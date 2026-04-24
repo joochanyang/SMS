@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@shared/prisma';
-import { verifyPassword, generateSessionToken } from '@/lib/admin-auth';
+import { verifyPassword } from '@/lib/admin-auth';
 import {
   createSession,
   setSessionCookie,
@@ -158,7 +158,10 @@ export async function POST(request: NextRequest) {
       });
 
       return NextResponse.json(
-        { error: '아이디 또는 비밀번호가 올바르지 않습니다.' },
+        {
+          error: '아이디 또는 비밀번호가 올바르지 않습니다.',
+          remainingAttempts: Math.max(0, 5 - newFailedCount),
+        },
         { status: 401 },
       );
     }

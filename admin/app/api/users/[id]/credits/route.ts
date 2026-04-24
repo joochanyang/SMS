@@ -6,26 +6,13 @@ import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { requireSudo } from '@/lib/sudo';
 import crypto from 'crypto';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // CRITICAL: Credit adjustment — real money operations
 // Requirements: transaction, atomic, idempotency, audit trail
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] users/[id]/credits:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -210,6 +197,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (err.requireSudo) response.requireSudo = true;
       return NextResponse.json(response, { status: err.status });
     }
-    return handleError(err);
+    return handleApiError(err, 'users/[id]/credits');
   }
 }

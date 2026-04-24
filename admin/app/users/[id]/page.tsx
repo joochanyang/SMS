@@ -10,6 +10,8 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import SudoModal from '@/components/sudo-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -78,6 +80,7 @@ export default function UserDetailPage() {
   const [creditUnit, setCreditUnit] = useState<'KRW' | 'COUNT'>('KRW');
   const [creditReason, setCreditReason] = useState('');
   const [creditLoading, setCreditLoading] = useState(false);
+  const [showSudoModal, setShowSudoModal] = useState(false);
 
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -163,7 +166,11 @@ export default function UserDetailPage() {
         await fetchData();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || '처리에 실패했습니다.');
+        if (res.status === 403 && data.requireSudo) {
+          setShowSudoModal(true);
+        } else {
+          alert(data.error || '처리에 실패했습니다.');
+        }
       }
     } finally {
       setCreditLoading(false);
@@ -246,6 +253,10 @@ export default function UserDetailPage() {
     );
   }
 
+  const canUpdateUser = hasPermission(admin.role, 'user:update');
+  const canSuspendUser = hasPermission(admin.role, 'user:suspend');
+  const canAdjustCredits = hasPermission(admin.role, 'credit:adjust_small') || hasPermission(admin.role, 'credit:adjust_large');
+
   return (
     <div className="admin-layout">
       <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
@@ -273,20 +284,20 @@ export default function UserDetailPage() {
                       setEditMaxCampaign(String(user.maxCampaignSize));
                       setEditReason('');
                       setEditModal(true);
-                    }}>
+                    }} disabled={!canUpdateUser}>
                       수정
                     </button>
-                    {user.status === 'ACTIVE' && (
+                    {canSuspendUser && user.status === 'ACTIVE' && (
                       <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'SUSPEND' })}>
                         <Ban size={14} /> 정지
                       </button>
                     )}
-                    {user.status === 'SUSPENDED' && (
+                    {canSuspendUser && user.status === 'SUSPENDED' && (
                       <button className="btn btn-outline btn-sm" onClick={() => setSuspendModal({ open: true, action: 'UNSUSPEND' })}>
                         <ShieldCheck size={14} /> 해제
                       </button>
                     )}
-                    {user.status !== 'BANNED' && (
+                    {canSuspendUser && user.status !== 'BANNED' && (
                       <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'BAN' })}>
                         <ShieldOff size={14} /> 차단
                       </button>
@@ -323,14 +334,16 @@ export default function UserDetailPage() {
               </div>
 
               {/* Credit adjustment button */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              {canAdjustCredits && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                 <button className="btn btn-primary btn-sm" onClick={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}>
                   <Plus size={14} /> 크레딧 충전
                 </button>
                 <button className="btn btn-outline-danger btn-sm" onClick={() => { setCreditType('ADMIN_DEDUCT'); setCreditModal(true); }}>
                   <Minus size={14} /> 크레딧 차감
                 </button>
-              </div>
+                </div>
+              )}
 
               {/* Credit history */}
               <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
@@ -508,6 +521,15 @@ export default function UserDetailPage() {
           </div>
         </div>
       )}
+
+      <SudoModal
+        isOpen={showSudoModal}
+        onClose={() => setShowSudoModal(false)}
+        onSuccess={async () => {
+          setShowSudoModal(false);
+          await handleCreditAdjust();
+        }}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import crypto from 'crypto';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,16 +20,6 @@ function maskPhone(phone: string): string {
   return phone.slice(0, 3) + '-****-' + phone.slice(-4);
 }
 
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] blacklist:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -107,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ entries: masked, total, page, limit });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'blacklist');
   }
 }
 
@@ -181,7 +172,7 @@ export async function POST(request: NextRequest) {
       entry: { ...entry, phoneNumber: maskPhone(entry.phoneNumber) },
     }, { status: 201 });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'blacklist');
   }
 }
 
@@ -232,6 +223,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'blacklist');
   }
 }

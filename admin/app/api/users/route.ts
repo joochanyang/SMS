@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { validatePasswordPolicy } from '@/lib/admin-auth';
 import bcrypt from 'bcryptjs';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,16 +24,6 @@ function maskEmail(email: string): string {
   return `${masked}@${domain}`;
 }
 
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] users:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -133,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users: masked, total, page, limit });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'users');
   }
 }
 
@@ -198,6 +189,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ user }, { status: 201 });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'users');
   }
 }

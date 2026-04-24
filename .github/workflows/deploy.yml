@@ -3,19 +3,60 @@ name: Deploy to Production
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Deploy via SSH
+      - name: Deploy via SSH (deploy user, auto-rollback)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
-          username: root
+          username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 15m
           script: |
+            set -euo pipefail
             cd /opt/sovereign-sms
-            git pull origin main
-            docker compose up -d --build
+
+            # 1) 배포 전 이미지 스냅샷 (롤백용)
+            docker tag sovereign-sms-user:latest sovereign-sms-user:rollback || true
+            docker tag sovereign-sms-admin:latest sovereign-sms-admin:rollback || true
+            PREV_SHA=$(git rev-parse HEAD)
+            echo "이전 커밋: $PREV_SHA"
+
+            # 2) pull + rebuild
+            git fetch origin main
+            git reset --hard origin/main
+
+            if ! docker compose up -d --build; then
+              echo "빌드 실패 → 코드 롤백"
+              git reset --hard "$PREV_SHA"
+              docker compose up -d
+              exit 1
+            fi
+
+            # 3) 헬스체크 (최대 60초)
+            OK=0
+            for i in $(seq 1 12); do
+              sleep 5
+              if curl -fsS http://localhost:3300/api/health >/dev/null 2>&1; then
+                OK=1
+                break
+              fi
+              echo "헬스체크 대기 중... ($i/12)"
+            done
+
+            if [ "$OK" -ne 1 ]; then
+              echo "헬스체크 실패 → 자동 롤백"
+              git reset --hard "$PREV_SHA"
+              docker tag sovereign-sms-user:rollback sovereign-sms-user:latest || true
+              docker tag sovereign-sms-admin:rollback sovereign-sms-admin:latest || true
+              docker compose up -d
+              exit 1
+            fi
+
+            echo "배포 성공"
             docker image prune -f

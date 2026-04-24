@@ -6,6 +6,8 @@ import { Radio, CheckCircle, XCircle, RefreshCw, Send, Zap } from 'lucide-react'
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import ConfirmModal from '@/components/confirm-modal';
+import SudoModal from '@/components/sudo-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -21,17 +23,20 @@ interface TestResult {
   success: boolean;
   balance?: number;
   currency?: string;
+  remainingCount?: number | null;
   error?: string;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
   infobip: 'Infobip',
   smsto: 'SMS.to',
+  txg: 'TXG-TEL',
 };
 
 const PROVIDER_DESCRIPTIONS: Record<string, string> = {
   infobip: '글로벌 CPaaS — 트라이얼 무료 크레딧 지원, 안정적인 DLR 웹훅',
   smsto: '저가형 글로벌 SMS — 건당 ~$0.009, DLR 웹훅 + API 폴링 지원',
+  txg: 'TXG-TEL HTTP API — 네이티브 배치 발송(최대 1만건), Push DLR 지원',
 };
 
 export default function SmsProvidersPage() {
@@ -58,6 +63,7 @@ export default function SmsProvidersPage() {
   const [sendMessage, setSendMessage] = useState('SovereignSMS 테스트 발송입니다.');
   const [sendLoading, setSendLoading] = useState(false);
   const [sendResult, setSendResult] = useState<any>(null);
+  const [showSudoModal, setShowSudoModal] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -71,18 +77,11 @@ export default function SmsProvidersPage() {
 
       const sessionData = await sessionRes.json();
       setAdmin(sessionData.admin);
+      setKillSwitch(sessionData.killSwitch ?? false);
 
       if (providersRes.ok) {
         const data = await providersRes.json();
         setProviders(data.providers || []);
-      }
-
-      // Kill switch
-      const ksRes = await fetch('/api/settings');
-      if (ksRes.ok) {
-        const ksData = await ksRes.json();
-        const ks = ksData.settings?.system?.find?.((s: any) => s.key === 'kill_switch');
-        setKillSwitch(ks?.value?.level === 'GLOBAL_STOP' || ks?.value?.level === 'GLOBAL_PAUSE');
       }
     } catch (err) {
       console.error('데이터 로딩 실패:', err);
@@ -151,7 +150,11 @@ export default function SmsProvidersPage() {
         body: JSON.stringify({ provider: sendProvider, to: sendTo, message: sendMessage }),
       });
       const data = await res.json();
-      setSendResult(data);
+      if (res.status === 403 && data.requireSudo) {
+        setShowSudoModal(true);
+      } else {
+        setSendResult(data);
+      }
     } catch {
       setSendResult({ success: false, error: '발송 실패' });
     } finally {
@@ -160,6 +163,10 @@ export default function SmsProvidersPage() {
   }
 
   if (!admin) return null;
+
+  const canReadProviderSettings = hasPermission(admin.role, 'setting:read');
+  const canUpdateProviderSettings = hasPermission(admin.role, 'setting:update');
+  const canSendProviderTest = admin.role === 'SUPER_ADMIN';
 
   return (
     <div className="admin-layout">
@@ -170,7 +177,7 @@ export default function SmsProvidersPage() {
         killSwitchActive={killSwitch}
       />
       <main className="admin-main">
-        <Header title="SMS 라인 관리" />
+        <Header title="SMS 라인 관리" killSwitchActive={killSwitch} adminName={admin.name} />
 
         <div className="admin-content">
         {loading ? (
@@ -220,7 +227,10 @@ export default function SmsProvidersPage() {
                   <div className={`provider-test-result ${testResults[p.name].success ? 'success' : 'error'}`}>
                     {testResults[p.name].success ? (
                       <span>
-                        <CheckCircle size={14} /> 연결 성공 — 잔액: {testResults[p.name].balance} {testResults[p.name].currency}
+                        <CheckCircle size={14} /> 연결 성공 — 잔액: {testResults[p.name].balance?.toFixed(4)} {testResults[p.name].currency}
+                        {testResults[p.name].remainingCount != null && (
+                          <> (≈ {testResults[p.name].remainingCount!.toLocaleString()}건)</>
+                        )}
                       </span>
                     ) : (
                       <span>
@@ -235,7 +245,7 @@ export default function SmsProvidersPage() {
                   <button
                     className="btn btn-outline btn-sm"
                     onClick={() => handleTest(p.name)}
-                    disabled={!p.isConfigured || testingProvider === p.name}
+                    disabled={!canReadProviderSettings || !p.isConfigured || testingProvider === p.name}
                   >
                     <RefreshCw size={14} className={testingProvider === p.name ? 'spin' : ''} />
                     {testingProvider === p.name ? '테스트 중...' : '연결 테스트'}
@@ -248,13 +258,13 @@ export default function SmsProvidersPage() {
                       setSendResult(null);
                       setSendModal(true);
                     }}
-                    disabled={!p.isConfigured}
+                    disabled={!canSendProviderTest || !p.isConfigured}
                   >
                     <Send size={14} />
                     테스트 발송
                   </button>
 
-                  {!p.isActive && p.isConfigured && (
+                  {!p.isActive && p.isConfigured && canUpdateProviderSettings && (
                     <button
                       className="btn btn-primary btn-sm"
                       onClick={() => {
@@ -348,6 +358,15 @@ export default function SmsProvidersPage() {
           </div>
         </div>
       )}
+
+      <SudoModal
+        isOpen={showSudoModal}
+        onClose={() => setShowSudoModal(false)}
+        onSuccess={async () => {
+          setShowSudoModal(false);
+          await handleSendTest();
+        }}
+      />
 
       <style jsx>{`
         .provider-card {

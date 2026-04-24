@@ -4,21 +4,8 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, requireRole } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { handleApiError } from '@shared/api-error';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] settings/admins/[id]:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -112,7 +99,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     return NextResponse.json({ admin: updated });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/admins/[id]');
   }
 }
 
@@ -156,6 +143,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'settings/admins/[id]');
   }
 }

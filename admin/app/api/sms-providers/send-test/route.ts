@@ -5,6 +5,9 @@ import { requireSudo } from '@/lib/sudo';
 import { logAdminAction } from '@/lib/audit';
 import { getProviderByName } from '@shared/sms-providers/router';
 import type { SmsProviderName } from '@shared/sms-providers/types';
+import { handleApiError } from '@shared/api-error';
+
+const VALID_PROVIDER_NAMES: SmsProviderName[] = ['infobip', 'smsto', 'txg'];
 
 // ---------------------------------------------------------------------------
 // POST /api/sms-providers/send-test — 프로바이더 테스트 발송 (1건)
@@ -28,8 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validNames: SmsProviderName[] = ['infobip', 'smsto'];
-    if (!validNames.includes(providerName)) {
+    if (!VALID_PROVIDER_NAMES.includes(providerName)) {
       return NextResponse.json(
         { error: '유효하지 않은 프로바이더입니다.' },
         { status: 400 },
@@ -63,13 +65,6 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (err) {
-    if (err instanceof Error) {
-      const status = (err as any).status;
-      if (status === 401 || status === 403) {
-        return NextResponse.json({ error: err.message }, { status });
-      }
-    }
-    console.error('[API] sms-providers/send-test:', err);
-    return NextResponse.json({ error: '테스트 발송 중 오류가 발생했습니다.' }, { status: 500 });
+    return handleApiError(err, 'sms-providers/send-test');
   }
 }

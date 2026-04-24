@@ -7,6 +7,7 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -102,6 +103,8 @@ export default function TemplatesPage() {
     }
   }
 
+  const canReviewTemplates = admin ? hasPermission(admin.role, 'template:review') : false;
+
   const columns: Column<TemplateRow>[] = [
     { key: 'name', label: '템플릿명', render: (row) => <span style={{ fontWeight: 500 }}>{row.name}</span> },
     { key: 'type', label: '유형', render: (row) => <span className="badge badge-muted">{row.type}</span> },
@@ -123,7 +126,7 @@ export default function TemplatesPage() {
           <button className="btn btn-ghost btn-xs" onClick={(e) => { e.stopPropagation(); setPreviewTemplate(row); }}>
             <Eye size={12} />
           </button>
-          {row.status === 'PENDING' && (
+          {canReviewTemplates && row.status === 'PENDING' && (
             <>
               <button className="btn btn-outline btn-xs" onClick={(e) => { e.stopPropagation(); setReviewModal({ open: true, id: row.id, action: 'APPROVE', template: row }); }}>
                 <Check size={12} /> 승인
@@ -205,7 +208,7 @@ export default function TemplatesPage() {
 
       {/* Review Modal */}
       <ConfirmModal
-        isOpen={reviewModal.open}
+        isOpen={reviewModal.open && canReviewTemplates}
         onClose={() => { setReviewModal({ open: false, id: '', action: '', template: null }); setRejectReason(''); }}
         onConfirm={handleReview}
         title={reviewModal.action === 'APPROVE' ? '템플릿 승인' : '템플릿 거절'}

@@ -1,6 +1,18 @@
-# 캠페인 자동 처리 Cron 설정
+# Cron 설정
 
-## 개요
+외부 cron 서비스(n8n 권장, 또는 서버 crontab)에서 아래 엔드포인트들을 주기적으로 호출합니다.
+
+| 엔드포인트 | 권장 주기 | 목적 |
+|---|---|---|
+| `POST /api/cron/process-campaigns` | 1분 | QUEUED/SENDING 캠페인 배치 처리 |
+| `POST /api/cron/expire-deposits` | 5분 | 만료된 USDT 입금 요청 정리 |
+| `POST /api/cron/txg-poll-reports` | 5분 | TXG 전달 결과 폴링 (Push DLR 누락 대비) |
+
+모든 cron 엔드포인트는 `Authorization: Bearer ${CRON_SECRET}` 헤더로 인증합니다.
+
+---
+
+## 1. 캠페인 자동 처리 (`process-campaigns`)
 
 QUEUED/SENDING 상태의 캠페인을 자동으로 배치 처리합니다.
 외부 cron 서비스에서 `POST /api/cron/process-campaigns`를 주기적으로 호출하는 방식입니다.
@@ -87,3 +99,60 @@ curl -s https://{도메인}/api/health
   "message": "서비스 점검 중입니다."
 }
 ```
+
+---
+
+## 2. TXG 전달 결과 폴링 (`txg-poll-reports`)
+
+TXG Push DLR(`PUT /api/txg/report`)이 누락·지연되는 경우를 대비한 이중화 폴링입니다.
+최근 24시간 내 `providerName=txg`이면서 `status=SENT`인 로그를 모아 `getreport` API로 결과를 조회해 `DELIVERED/FAILED`를 확정합니다.
+
+### n8n 설정
+```
+Schedule Trigger: 매 5분
+HTTP Request:
+  Method: POST
+  URL: https://{도메인}/api/cron/txg-poll-reports
+  Header: Authorization = Bearer {CRON_SECRET}
+```
+
+### 서버 crontab
+```bash
+# 매 5분마다 TXG 폴링
+*/5 * * * * curl -s -X POST https://{도메인}/api/cron/txg-poll-reports \
+  -H "Authorization: Bearer ${CRON_SECRET}" \
+  >> /var/log/txg-poll.log 2>&1
+```
+
+### 응답 예시
+```json
+{
+  "message": "120건 폴링, 34건 상태 업데이트",
+  "polled": 120,
+  "updated": 34,
+  "skippedChunks": 0
+}
+```
+
+TXG 프로바이더가 미설정이면 즉시 200 + `{ polled: 0, updated: 0, skipped: "provider_not_configured" }` 를 반환합니다 (cron 실패로 처리되지 않음).
+
+---
+
+## 3. TXG Push DLR 웹훅 등록 (cron 아님, 참고용)
+
+TXG 관리 패널에서 콜백 URL을 다음과 같이 등록합니다.
+
+```
+URL:    https://{도메인}/api/txg/report
+Method: PUT
+Header: x-txg-token: {TXG_DLR_SECRET}
+```
+
+`TXG_DLR_SECRET`은 `openssl rand -base64 32` 로 생성한 값을 `.env`와 TXG 관리 패널 양쪽에 동일하게 입력해야 합니다.
+미설정 시 DLR 요청을 전면 거부합니다 (503).
+
+---
+
+## 4. 만료된 USDT 입금 정리 (`expire-deposits`)
+
+기존 `POST /api/cron/expire-deposits`는 5분 간격으로 호출해 `expiresAt` 경과 입금을 `EXPIRED` 처리합니다. 세부 설정은 본 장 1절과 동일 패턴입니다.

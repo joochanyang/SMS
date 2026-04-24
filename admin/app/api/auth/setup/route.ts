@@ -22,7 +22,7 @@ const setupSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // 1. Check ADMIN_SETUP_SECRET is configured
-    const setupSecret = process.env.ADMIN_SETUP_SECRET || process.env.SETUP_SECRET;
+    const setupSecret = process.env.ADMIN_SETUP_SECRET;
     if (!setupSecret) {
       return NextResponse.json(
         { error: '초기 설정이 비활성화되어 있습니다.' },

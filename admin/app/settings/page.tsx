@@ -6,6 +6,8 @@ import { Settings, Save, AlertTriangle } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import ConfirmModal from '@/components/confirm-modal';
+import SudoModal from '@/components/sudo-modal';
+import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -35,6 +37,8 @@ export default function SettingsPage() {
   const [killModal, setKillModal] = useState(false);
   const [killReason, setKillReason] = useState('');
   const [killLoading, setKillLoading] = useState(false);
+  const [showSudoModal, setShowSudoModal] = useState(false);
+  const [sudoRetryAction, setSudoRetryAction] = useState<'kill-switch' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -100,6 +104,13 @@ export default function SettingsPage() {
         setKillModal(false);
         setKillReason('');
         await fetchData();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction('kill-switch');
+        setShowSudoModal(true);
       }
     } finally {
       setKillLoading(false);
@@ -112,6 +123,9 @@ export default function SettingsPage() {
     setEditReason('');
     setEditModal(true);
   }
+
+  const canUpdateSettings = admin ? hasPermission(admin.role, 'setting:update') : false;
+  const canToggleKillSwitch = admin ? hasPermission(admin.role, 'killswitch:toggle') : false;
 
   if (!admin) {
     return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
@@ -132,6 +146,7 @@ export default function SettingsPage() {
               <button
                 className={`btn ${killSwitch ? 'btn-primary' : 'btn-danger'} btn-sm`}
                 onClick={() => setKillModal(true)}
+                disabled={!canToggleKillSwitch}
               >
                 {killSwitch ? '해제' : '활성화'}
               </button>
@@ -171,7 +186,7 @@ export default function SettingsPage() {
                           </td>
                           <td style={{ padding: '10px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>{item.description ?? '-'}</td>
                           <td style={{ padding: '10px 16px' }}>
-                            {admin.role === 'SUPER_ADMIN' || admin.role === 'ADMIN' ? (
+                            {canUpdateSettings ? (
                               <button className="btn btn-ghost btn-xs" onClick={() => openEdit(item)}>
                                 <Save size={12} />
                               </button>
@@ -229,6 +244,21 @@ export default function SettingsPage() {
           <textarea className="input" rows={2} value={killReason} onChange={(e) => setKillReason(e.target.value)} placeholder="사유를 입력하세요..." style={{ width: '100%', resize: 'vertical' }} />
         </div>
       </ConfirmModal>
+
+      <SudoModal
+        isOpen={showSudoModal}
+        onClose={() => {
+          setShowSudoModal(false);
+          setSudoRetryAction(null);
+        }}
+        onSuccess={async () => {
+          setShowSudoModal(false);
+          if (sudoRetryAction === 'kill-switch') {
+            await handleKillSwitch();
+          }
+          setSudoRetryAction(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@shared/prisma';
 import { validateSession } from '@/lib/admin-session';
+import { getKillSwitchLevel, isKillSwitchActive } from '@/lib/kill-switch';
 
 // ---------------------------------------------------------------------------
 // GET /api/auth/session — Return current admin info if authenticated
@@ -7,7 +9,13 @@ import { validateSession } from '@/lib/admin-session';
 
 export async function GET(request: NextRequest) {
   try {
-    const admin = await validateSession(request);
+    const [admin, killSwitchSetting] = await Promise.all([
+      validateSession(request),
+      prisma.systemSetting.findUnique({
+        where: { key: 'kill_switch' },
+        select: { value: true },
+      }),
+    ]);
 
     if (!admin) {
       return NextResponse.json(
@@ -16,15 +24,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const killSwitchLevel = getKillSwitchLevel(killSwitchSetting?.value);
+
     return NextResponse.json({
       authenticated: true,
       admin: {
         id: admin.id,
+        email: admin.email,
         username: admin.username,
         name: admin.name,
         role: admin.role,
         mfaEnabled: admin.mfaEnabled,
       },
+      killSwitch: isKillSwitchActive(killSwitchLevel),
+      killSwitchLevel,
     });
   } catch {
     return NextResponse.json(

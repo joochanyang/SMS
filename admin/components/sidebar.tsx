@@ -19,6 +19,7 @@ import {
   User,
   Radio,
 } from 'lucide-react';
+import { hasPermission, type Permission } from '@/lib/rbac';
 
 interface SidebarProps {
   adminName: string;
@@ -28,16 +29,21 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/', label: '대시보드', icon: LayoutDashboard },
-  { href: '/users', label: '사용자 관리', icon: Users },
-  { href: '/campaigns', label: '캠페인 모니터링', icon: MessageSquare },
-  { href: '/credits', label: '크레딧 관리', icon: Wallet },
-  { href: '/blacklist', label: '블랙리스트', icon: Ban },
-  { href: '/templates', label: '템플릿 관리', icon: FileText },
-  { href: '/sms-providers', label: 'SMS 라인 관리', icon: Radio },
-  { href: '/settings', label: '시스템 설정', icon: Settings },
-  { href: '/audit', label: '감사 로그', icon: ClipboardList },
-];
+  { href: '/', label: '대시보드', icon: LayoutDashboard, permission: 'dashboard:read' },
+  { href: '/users', label: '사용자 관리', icon: Users, permission: 'user:read' },
+  { href: '/campaigns', label: '캠페인 모니터링', icon: MessageSquare, permission: 'campaign:read' },
+  { href: '/credits', label: '크레딧 관리', icon: Wallet, permission: 'credit:read' },
+  { href: '/blacklist', label: '블랙리스트', icon: Ban, permission: 'blacklist:read' },
+  { href: '/templates', label: '템플릿 관리', icon: FileText, permission: 'template:read' },
+  { href: '/sms-providers', label: 'SMS 라인 관리', icon: Radio, permission: 'setting:read' },
+  { href: '/settings', label: '시스템 설정', icon: Settings, permission: 'setting:read' },
+  { href: '/audit', label: '감사 로그', icon: ClipboardList, permission: 'audit:read' },
+] as const satisfies ReadonlyArray<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  permission: Permission;
+}>;
 
 export default function Sidebar({ adminName, adminRole, killSwitchActive }: SidebarProps) {
   const pathname = usePathname();
@@ -52,6 +58,8 @@ export default function Sidebar({ adminName, adminRole, killSwitchActive }: Side
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
   }
+
+  const visibleNavItems = navItems.filter((item) => hasPermission(adminRole, item.permission));
 
   async function handleLogout() {
     try {
@@ -98,7 +106,7 @@ export default function Sidebar({ adminName, adminRole, killSwitchActive }: Side
 
         <nav className="sidebar-nav">
           <div className="sidebar-section-label">메뉴</div>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <a
               key={item.href}
               href={item.href}

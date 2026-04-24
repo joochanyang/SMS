@@ -75,13 +75,15 @@ model SmsLog {
   messageBody   String
   status        String    @default("PENDING") // PENDING, SENT, RETRY_PENDING, DELIVERED, FAILED
   cost          Decimal   @default(0) @db.Decimal(12, 4)
-  messageId     String?   @unique // Infobip specific message ID
+  messageId     String?   @unique // 프로바이더가 발급한 메시지 ID
+  providerName   String?   // 발송 시 사용된 프로바이더명 (infobip, smsto, txg 등) — 전달률 집계에 사용
   providerStatus String?
   providerError  String?
   networkName    String?   // 통신사명 (Infobip DLR에서 추출)
   networkCode    String?   // MCC+MNC 코드 (예: "450 05" = SKT)
   retryCount     Int       @default(0)
   nextRetryAt    DateTime?
+  pollRetryCount Int       @default(0) // TXG DLR 폴링 시도 횟수 (≥12회 무응답 시 DELIVERY_UNKNOWN 처리)
   createdAt     DateTime  @default(now())
 
   @@index([userId, createdAt])
@@ -89,6 +91,7 @@ model SmsLog {
   @@index([status, createdAt])
   @@index([status, nextRetryAt])
   @@index([userId, status])
+  @@index([providerName, status, createdAt]) // 프로바이더별 전달률 집계 + TXG 폴링 대상 조회
 }
 
 model Transaction {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
+import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -15,20 +16,6 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function handleError(err: unknown): NextResponse {
-  if (err instanceof Error) {
-    const status = (err as any).status;
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ error: err.message }, { status });
-    }
-  }
-  console.error('[API] templates:', err);
-  return NextResponse.json({ error: '요청 처리 중 오류가 발생했습니다.' }, { status: 500 });
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/templates — List message templates
@@ -75,6 +62,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ templates, total, page, limit });
   } catch (err) {
-    return handleError(err);
+    return handleApiError(err, 'templates');
   }
 }

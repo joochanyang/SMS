@@ -55,19 +55,19 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // 최근 7일 SmsLog (날짜별 그룹화를 위해 raw 데이터 가져오기)
-      prisma.smsLog.findMany({
-        where: {
-          userId,
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-        select: {
-          status: true,
-          createdAt: true,
-        },
-      }),
+      // 최근 7일 SmsLog — DB에서 DATE_TRUNC 집계 (로그 N건 전부 fetch 금지)
+      prisma.$queryRaw<Array<{
+        day: Date;
+        status: string;
+        cnt: bigint;
+      }>>`
+        SELECT DATE_TRUNC('day', "createdAt") AS day, "status", COUNT(*)::bigint AS cnt
+        FROM "SmsLog"
+        WHERE "userId" = ${userId}
+          AND "createdAt" >= NOW() - INTERVAL '7 days'
+        GROUP BY 1, 2
+        ORDER BY 1
+      `,
     ]);
 
     // overview 계산 — CANCELLED 로그는 환불 처리되므로 totalSent/totalSpent 집계에서 제외
@@ -103,14 +103,14 @@ export async function GET(req: NextRequest) {
       dailyMap[key] = { sent: 0, delivered: 0, failed: 0 };
     }
 
-    for (const log of dailyLogs) {
-      const d = new Date(log.createdAt);
+    for (const row of dailyLogs) {
+      const d = new Date(row.day);
       const key = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-      if (dailyMap[key]) {
-        dailyMap[key].sent++;
-        if (log.status === "DELIVERED") dailyMap[key].delivered++;
-        if (log.status === "FAILED") dailyMap[key].failed++;
-      }
+      if (!dailyMap[key]) continue;
+      const cnt = Number(row.cnt);
+      dailyMap[key].sent += cnt;
+      if (row.status === "DELIVERED") dailyMap[key].delivered += cnt;
+      if (row.status === "FAILED") dailyMap[key].failed += cnt;
     }
 
     const dailyStats = Object.entries(dailyMap).map(([date, counts]) => ({

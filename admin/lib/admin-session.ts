@@ -10,14 +10,11 @@ const SESSION_ABSOLUTE_MS = 8 * 60 * 60 * 1000; // 8 hours
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { getClientIp as sharedGetClientIp } from '@shared/client-ip';
+
 export function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
-  return '127.0.0.1';
+  const ip = sharedGetClientIp(req, 'claimed');
+  return ip === 'unknown' ? '127.0.0.1' : ip;
 }
 
 export function getClientUserAgent(req: NextRequest): string {
@@ -25,16 +22,10 @@ export function getClientUserAgent(req: NextRequest): string {
 }
 
 function cookieOptions() {
-  // HTTPS가 아닌 환경(HTTP IP 직접 접속 등)에서도 쿠키가 설정되도록
-  // FORCE_SECURE_COOKIE=false 환경변수로 제어 가능
-  const forceSecure = process.env.FORCE_SECURE_COOKIE;
-  const secure = forceSecure !== undefined
-    ? forceSecure === 'true'
-    : process.env.NODE_ENV === 'production';
-
+  // 프로덕션에서는 항상 Secure=true. HTTPS 리버스 프록시(Nginx/Caddy) 필수.
   return {
     httpOnly: true,
-    secure,
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict' as const,
     path: '/',
   };
