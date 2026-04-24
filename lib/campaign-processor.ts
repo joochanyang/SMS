@@ -13,7 +13,6 @@ import {
 } from "@/lib/sms-policy";
 import { generateSenderId } from "@/lib/sender-id";
 
-const DEFAULT_BATCH_SIZE = SMS_POLICY.maxBatchSize;
 const MIN_DYNAMIC_BATCH_SIZE = 20;
 
 function clampInt(value: number, min: number, max: number) {
@@ -32,7 +31,7 @@ export interface CampaignBatchResult {
  *
  * @param campaignId 캠페인 ID
  * @param userId     캠페인 소유자 ID (크레딧 환불 등에 사용)
- * @param batchSize  배치 크기 (기본: SMS_POLICY.maxBatchSize)
+ * @param batchSize  배치 크기 (기본: 활성 프로바이더의 maxBatchSize)
  * @returns 처리 결과
  */
 export async function processCampaignBatch(
@@ -40,10 +39,6 @@ export async function processCampaignBatch(
   userId: string,
   batchSize?: number,
 ): Promise<CampaignBatchResult> {
-  const effectiveBatchSizeInput = batchSize
-    ? clampInt(batchSize, 1, 1000)
-    : DEFAULT_BATCH_SIZE;
-
   const campaign = await prisma.smsCampaign.findUnique({
     where: { id: campaignId },
   });
@@ -82,14 +77,23 @@ export async function processCampaignBatch(
     });
   }
 
+  // 활성 프로바이더를 먼저 로드하여 배치 상한의 기준값으로 사용한다.
+  const provider = await getActiveProvider();
+  const providerMaxBatch = Math.max(1, provider.maxBatchSize);
+
+  const effectiveBatchSizeInput = batchSize
+    ? clampInt(batchSize, 1, 10000)
+    : providerMaxBatch;
+
+  // 배치 상한은 provider.maxBatchSize 기준(providerMaxBatch)으로 clamp한다.
   const effectiveBatchSize = clampInt(
     Math.min(
       effectiveBatchSizeInput,
-      campaign.dynamicBatchSize || DEFAULT_BATCH_SIZE,
-      SMS_POLICY.maxBatchSize,
+      campaign.dynamicBatchSize || providerMaxBatch,
+      providerMaxBatch,
     ),
     1,
-    SMS_POLICY.maxBatchSize,
+    providerMaxBatch,
   );
 
   // PENDING / RETRY_PENDING 로그를 원자적으로 선점 (FOR UPDATE SKIP LOCKED)
@@ -231,8 +235,7 @@ export async function processCampaignBatch(
     });
   }
 
-  // Provider 추상화 발송
-  const provider = await getActiveProvider();
+  // Provider 추상화 발송 (provider는 함수 상단에서 이미 로드됨)
   let providerResults: import("@/lib/sms-providers/types").SmsSendResult[] = [];
   try {
     providerResults = await provider.sendBatch(
@@ -285,7 +288,7 @@ export async function processCampaignBatch(
       const nextStreak = (campaign.tempFailureStreak || 0) + 1;
       const nextDynamic = Math.max(
         MIN_DYNAMIC_BATCH_SIZE,
-        Math.floor((campaign.dynamicBatchSize || DEFAULT_BATCH_SIZE) / 2),
+        Math.floor((campaign.dynamicBatchSize || providerMaxBatch) / 2),
       );
       const cooldownSeconds = Math.min(120, 15 * nextStreak);
       await tx.smsCampaign.update({
@@ -355,8 +358,8 @@ export async function processCampaignBatch(
     // 캠페인 카운터 + 배치 크기 복구를 단일 UPDATE로 처리 (N+1 제거)
     const totalProcessed = sentCount + failedFromProviderCount;
     const nextDynamic = Math.min(
-      SMS_POLICY.maxBatchSize,
-      (campaign.dynamicBatchSize || DEFAULT_BATCH_SIZE) + 20,
+      providerMaxBatch,
+      (campaign.dynamicBatchSize || providerMaxBatch) + 20,
     );
     await tx.smsCampaign.update({
       where: { id: campaignId },
