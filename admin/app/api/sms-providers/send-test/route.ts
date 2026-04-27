@@ -47,6 +47,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // TXG는 SMPP 워커 전담 — 동기 send-test 불가.
+    // 실제 발송 검증은 SUPER_ADMIN 본인 계정으로 캠페인을 만들어 canary 번호로 1건 발송.
+    if (providerName === 'txg') {
+      return NextResponse.json({
+        success: false,
+        error: 'TXG는 SMPP 워커가 비동기 처리하므로 즉시 send-test를 지원하지 않습니다. 본인 캠페인으로 1건 발송 후 발송내역을 확인하세요.',
+      });
+    }
+
     const results = await provider.sendBatch([{ to, text: message }]);
     const result = results[0];
 
