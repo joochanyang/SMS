@@ -184,8 +184,9 @@ async function processCampaignOnce(
     return blocked.length;
   }
 
-  // 발신번호 확보
-  const senderId = await ensureSenderId(campaign);
+  // 캠페인 메타데이터로 senderId만 보존 (실제 SMPP 송신 시에는 사용 안 함)
+  // 한국 통신사 정책상 source_addr는 빈 값으로 보내야 하므로 sendOneLog에 전달하지 않는다.
+  await ensureSenderId(campaign);
 
   // SMPP 발송 (segmenter로 분할 후 첫 segment의 message_id를 기록)
   let processedDelta = 0;
@@ -194,7 +195,7 @@ async function processCampaignOnce(
   // 각 행을 병렬로 처리하되 SMPP 윈도우가 자동으로 throttle 한다 (connection.submit 내부)
   await Promise.all(
     sendable.map(async (log) => {
-      const outcome = await sendOneLog(conn, log, senderId);
+      const outcome = await sendOneLog(conn, log);
       const result = await persistOutcome(log, outcome);
       processedDelta += 1;
       if (result === "FAILED") failedDelta += 1;
@@ -245,16 +246,21 @@ interface PerLogOutcome {
 async function sendOneLog(
   conn: SmppConnection,
   log: ClaimedLog,
-  senderId: string,
 ): Promise<PerLogOutcome> {
   const ref = nextReferenceNumber();
   const segments = segmentMessage(log.messageBody, ref);
+
+  // source_addr는 항상 빈 값으로 송신.
+  // 한국 통신사가 알파벳 sender_id를 차단(UNDELIV err=267)하므로 비워서 보내야 한다.
+  // 통신사가 자체 게이트웨이 번호로 덮어쓰므로 수신자에게 표시되는 발신번호는
+  // TXG가 통제할 수 없다. (2026-04-27 검증 — sender_id 채울 시 100% UNDELIV)
+  // senderId는 SmsCampaign.senderId 컬럼에 메타데이터로만 보존.
 
   // 첫 segment 결과로 SmsLog 상태 결정. 나머지 segment는 송신만 하고 결과는 로깅만.
   // (TXG submit billing — 모든 segment에 과금되지만 DLR 추적은 첫 part로 단순화)
   const firstOutcome = await conn.submit({
     destination_addr: log.targetNumber,
-    source_addr: senderId,
+    source_addr: "",
     short_message: segments[0].shortMessage,
     data_coding: segments[0].dataCoding,
     registered_delivery: 1, // SMSC delivery receipt 요청
@@ -271,7 +277,7 @@ async function sendOneLog(
       const seg = segments[i];
       const outcome = await conn.submit({
         destination_addr: log.targetNumber,
-        source_addr: senderId,
+        source_addr: "",
         short_message: seg.shortMessage,
         data_coding: seg.dataCoding,
         registered_delivery: 1,
