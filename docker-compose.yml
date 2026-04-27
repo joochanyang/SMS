@@ -42,6 +42,23 @@ services:
       retries: 3
       start_period: 40s
 
+  # SMPP 워커 — TXG 메인 발송 라인 (단일 인스턴스 강제, 다중 바인드 = 계정 정지)
+  sovereign-sms-smpp-worker:
+    build:
+      context: .
+      dockerfile: services/smpp-worker/Dockerfile
+    container_name: sovereign-sms-smpp-worker
+    restart: unless-stopped
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sovereign-sms-net
+    deploy:
+      replicas: 1
+    # 외부 SMPP 서버로 outbound TCP만 사용 — 인바운드 포트 노출 불필요
+    # (deliver_sm DLR도 같은 outbound 연결로 수신)
+
 networks:
   sovereign-sms-net:
     name: sovereign-sms-net

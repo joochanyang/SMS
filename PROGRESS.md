@@ -1,8 +1,103 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> 마지막 업데이트: 2026-04-24 12:00 (TXG 전달률 추적 시스템 완성 — DLR 보안 + 폴링 이중화 + 프로바이더별 대시보드)
+> 마지막 업데이트: 2026-04-27 13:15 (TXG SMPP 3.4 전면 전환 — HTTP /sendsms·/getreport·webhook DLR·폴링 cron 폐기, 단일 워커 컨테이너로 통합)
 > 프로젝트: `/Users/mr.joo/Desktop/sms문자사이트`
 > 감사 근거: `.planning/SECURITY-PLAN.md` 전 항목을 실제 코드와 대조
+
+---
+
+## 🆕 2026-04-27 — TXG 메인 발송 SMPP 전환
+
+**배경**: TXG HTTP API의 push DLR 미작동(2026-04-24 사건)과 수시 라우트 silent fail로 신뢰성 문제 누적. TXG 측에서 SMPP 3.4 자격증명 발급. 메인 발송 라인을 SMPP 단일화하여 deliver_sm in-band DLR로 추적 신뢰성 회복.
+
+### 아키텍처 결정
+| 항목 | 변경 전 (HTTP) | 변경 후 (SMPP) |
+|---|---|---|
+| 발송 | `POST /sendsms` 배치 | `submit_sm` PDU 1건씩, 윈도우 50 동시 |
+| 인증 | 매 요청 account/password | bind_transceiver 1회, 영속 TCP |
+| DLR | Push webhook + 폴링 cron | **같은 연결로 deliver_sm in-band** |
+| Next.js 적합성 | API 라우트에서 직접 호출 | API 라우트 부적합 → **별도 워커 컨테이너** |
+| 호스팅 | Next.js 컨테이너 내부 | `sovereign-sms-smpp-worker` 신규 |
+
+### 신규 컴포넌트 — `services/smpp-worker/`
+| 파일 | 책임 |
+|---|---|
+| `index.ts` | 메인 엔트리 — config 로드, SMPP bind, 폴러 시작, SIGTERM/SIGINT graceful shutdown |
+| `config.ts` | 환경변수 fail-fast 검증 |
+| `connection.ts` | bind_transceiver / enquire_link / 재접속 backoff(1s→30s) / submit_sm 윈도잉 / timeout 처리 |
+| `segmenter.ts` | UCS-2 BE / GSM-7 자동 감지 + UDH concatenation (한글 70자 초과 시 분할) |
+| `poller.ts` | PENDING/RETRY_PENDING 행 claim (FOR UPDATE SKIP LOCKED) → SMPP 송신 → DB 반영 |
+| `dlr.ts` | deliver_sm short_message 본문 + TLV(receipted_message_id, message_state) 파싱 → SmsLog 종결 |
+| `smpp-types.d.ts` | `smpp` npm 패키지 타입 선언 (공식 .d.ts 부재) |
+| `Dockerfile` | tsx 런타임으로 직접 실행, prisma generate 포함 |
+
+### 비용 안전 원칙 (사용자 명시 요구)
+TXG는 "submit billing" — 모든 submit_sm에 과금. 이중과금 방지를 위한 보수 정책:
+- **submit_sm 응답 미수신**(timeout 또는 disconnect)은 `FAILED + providerStatus='SUBMIT_AMBIGUOUS'`로 종결하고 **재시도 금지**
+- **SMPP transient 에러**(THROTTLED/MSGQFUL/일부 SYSERR만 retryable) → `RETRY_PENDING` + 지수 backoff
+- **단일 인스턴스 강제**: `docker-compose deploy.replicas: 1` — 다중 바인드는 TXG 계정 정지 사유
+- **동시 in-flight 상한**(TXG_SMPP_WINDOW=50) — submit_sm_resp 전에 무한 큐잉 방지
+
+### 폐기된 코드
+| 파일 | 사유 |
+|---|---|
+| `app/api/txg/report/route.ts` | push DLR webhook 폐기 (in-band deliver_sm으로 대체) |
+| `app/api/cron/txg-poll-reports/route.ts` | 폴링 이중화 폐기 (in-band DLR이 신뢰 가능) |
+| `__tests__/lib/txg-provider.test.ts` | HTTP fetch 모킹 테스트, SMPP 전환으로 무의미 |
+| `lib/sms-providers/txg.ts` (sendBatch + getReport + parseResponse + mapTxgEventToStatus 등) | HTTP 발송 경로 제거. 잔액 조회 `getBalance`만 유지 (SMPP에 잔액 query 없음) |
+
+### Next.js 측 통합
+- `lib/campaign-processor.ts` — 활성 프로바이더가 `txg`이면 즉시 return (워커가 단독 처리). Infobip/SMS.to만 Next.js 처리.
+- `admin/app/api/sms-providers/send-test/route.ts` — TXG는 동기 send-test 불가, 안내 메시지 반환
+- `proxy.ts` — `/api/txg/report` publicPaths/csrfExempt에서 제거
+- `lib/sms-providers/txg.ts::TxgProvider.sendBatch` — 호출 시 `TxgSendBatchUnsupportedError` 즉시 throw (잘못된 경로 fail-closed)
+
+### 환경변수 변경
+**제거**: `TXG_BASE_URL`, `TXG_ACCOUNT`, `TXG_PASSWORD`, `TXG_DLR_SECRET`, `TXG_DLR_WEBHOOK_URL`, `TXG_USE_ENCRYPTION`, `TXG_ENCRYPTION_KEY`
+
+**신규**:
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `TXG_SMPP_HOST` | (필수) | TXG 발급 SMPP 서버 |
+| `TXG_SMPP_PORT` | 20002 | SMPP 포트 |
+| `TXG_SMPP_SYSTEM_ID` | (필수) | TXG Username |
+| `TXG_SMPP_PASSWORD` | (필수) | TXG SMPP password (평문) |
+| `TXG_HTTP_BALANCE_URL` | — | 잔액 조회 HTTP 엔드포인트 (포트 20003) |
+| `TXG_HTTP_ACCOUNT` | — | HTTP /getbalance 계정 |
+| `TXG_HTTP_PASSWORD` | — | HTTP /getbalance 비밀번호 |
+| `TXG_SMPP_WINDOW` | 50 | 동시 in-flight submit_sm |
+| `TXG_SMPP_SUBMIT_TIMEOUT_MS` | 60000 | submit_sm 응답 timeout |
+| `TXG_SMPP_ENQUIRE_LINK_MS` | 30000 | keepalive 주기 |
+| `TXG_SMPP_POLL_INTERVAL_MS` | 2000 | 워커 PENDING 폴링 주기 |
+| `TXG_SMPP_BATCH_SIZE` | 200 | 폴링 1회당 최대 행 수 |
+
+### 의존성
+- `smpp@^0.5.1` — SMPP 3.4/5.0 client (farhadi/node-smpp)
+- `tsx@^4.21.0` — 워커 TypeScript 런타임 (별도 빌드 단계 불필요)
+
+### 검증
+- `npx tsc --noEmit` — 신규 SMPP 코드로 인한 오류 0건 (기존 noise 3건은 logger.test.ts NODE_ENV readonly 이슈)
+- `npx next build` — 유저 앱 빌드 성공, 신규 라우트 등록 정상 (TXG HTTP 라우트 사라짐 확인)
+- 멀티파트 한글 메시지 분할 로직: 70자 초과 시 UDH 6바이트 헤더 부착 + segment 67자 단위
+
+### 🚨 배포 절차
+1. `.env`에 SMPP 환경변수 7개 입력 (위 표 참조). **자격증명 절대 커밋 금지**
+2. `docker compose build sovereign-sms-smpp-worker`
+3. `docker compose up -d sovereign-sms-smpp-worker`
+4. `docker compose logs -f sovereign-sms-smpp-worker` — `bind_transceiver 성공` 로그 확인
+5. 관리자 패널에서 활성 프로바이더 = `txg` 설정
+6. 본인 캠페인으로 canary 번호 1건 발송 → 통신3사 폰 수신 확인 → DLR `DELIVERED` 전이 확인
+7. **(중요)** 외부 cron에서 `/api/cron/txg-poll-reports` 호출 등록되어 있다면 **반드시 제거** (라우트 폐기됨, 401만 받음)
+8. **(중요)** TXG 관리 패널에서 push DLR 콜백 URL 등록되어 있다면 **반드시 제거** (in-band DLR로 대체)
+
+### 🔜 후속 과제
+| # | 항목 | 공수 | 근거 |
+|---|---|---|---|
+| 1 | 멀티파트 부분 실패 추적 | 4h | 현재 첫 segment 기준으로 종결 — 2/N 실패 시 사용자에겐 truncated 전달이지만 DELIVERED 표시될 수 있음. 새 컬럼 `messageIdParts: String[]` 검토 |
+| 2 | 좀비 SENT 종결 (deliver_sm 미수신 24h) | 2h | SMPP에서도 SMSC가 DLR을 안 주는 경우 가능 — pollRetryCount 대신 `createdAt + 24h < now` 기반 정리 cron |
+| 3 | submit_sm 처리율 모니터링 | 2h | 워커가 분당 N건 처리하는지 대시보드 노출 — bind 재접속 횟수, ambiguous 카운트 등 |
+| 4 | bind 재접속 알람 | 1h | 5분 내 3회 이상 재접속 시 텔레그램 알람 (TXG 측 SMPP 장애 조기 감지) |
+| 5 | DLR 미매칭 message_id 로깅 | 0.5h | 첫 segment 외 part의 deliver_sm은 SmsLog에 매칭 안 됨 — 운영 가시성 위해 별도 카운터 |
 
 ---
 

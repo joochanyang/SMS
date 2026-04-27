@@ -4,9 +4,10 @@
 
 | 엔드포인트 | 권장 주기 | 목적 |
 |---|---|---|
-| `POST /api/cron/process-campaigns` | 1분 | QUEUED/SENDING 캠페인 배치 처리 |
+| `POST /api/cron/process-campaigns` | 1분 | QUEUED/SENDING 캠페인 배치 처리 (Infobip/SMS.to 전용 — TXG는 SMPP 워커가 단독 처리) |
 | `POST /api/cron/expire-deposits` | 5분 | 만료된 USDT 입금 요청 정리 |
-| `POST /api/cron/txg-poll-reports` | 5분 | TXG 전달 결과 폴링 (Push DLR 누락 대비) |
+
+> **TXG는 cron 불필요.** SMPP 워커(`sovereign-sms-smpp-worker` 컨테이너)가 자체 폴링 루프로 PENDING 행을 처리하고, deliver_sm DLR을 같은 SMPP 연결에서 in-band로 받습니다. HTTP push DLR webhook(`/api/txg/report`)와 폴링 cron(`/api/cron/txg-poll-reports`)은 **2026-04-27 SMPP 전환과 함께 폐기**되었습니다.
 
 모든 cron 엔드포인트는 `Authorization: Bearer ${CRON_SECRET}` 헤더로 인증합니다.
 
@@ -102,57 +103,34 @@ curl -s https://{도메인}/api/health
 
 ---
 
-## 2. TXG 전달 결과 폴링 (`txg-poll-reports`)
+## 2. TXG SMPP 워커 (cron 아님 — daemon 컨테이너)
 
-TXG Push DLR(`PUT /api/txg/report`)이 누락·지연되는 경우를 대비한 이중화 폴링입니다.
-최근 24시간 내 `providerName=txg`이면서 `status=SENT`인 로그를 모아 `getreport` API로 결과를 조회해 `DELIVERED/FAILED`를 확정합니다.
+TXG 발송은 SMPP 3.4 transceiver 단일 연결로 송수신합니다.
+`sovereign-sms-smpp-worker` 컨테이너가 다음 환경변수로 동작합니다:
 
-### n8n 설정
 ```
-Schedule Trigger: 매 5분
-HTTP Request:
-  Method: POST
-  URL: https://{도메인}/api/cron/txg-poll-reports
-  Header: Authorization = Bearer {CRON_SECRET}
+TXG_SMPP_HOST=...           # TXG 발급
+TXG_SMPP_PORT=20002
+TXG_SMPP_SYSTEM_ID=...      # TXG Username
+TXG_SMPP_PASSWORD=...       # TXG SMPP Password (평문)
+TXG_HTTP_BALANCE_URL=...    # 잔액 조회용 HTTP (포트 20003)
+TXG_HTTP_ACCOUNT=...
+TXG_HTTP_PASSWORD=...
 ```
 
-### 서버 crontab
+배포:
 ```bash
-# 매 5분마다 TXG 폴링
-*/5 * * * * curl -s -X POST https://{도메인}/api/cron/txg-poll-reports \
-  -H "Authorization: Bearer ${CRON_SECRET}" \
-  >> /var/log/txg-poll.log 2>&1
+docker compose up -d sovereign-sms-smpp-worker
+docker compose logs -f sovereign-sms-smpp-worker
 ```
 
-### 응답 예시
-```json
-{
-  "message": "120건 폴링, 34건 상태 업데이트",
-  "polled": 120,
-  "updated": 34,
-  "skippedChunks": 0
-}
-```
+**⚠️ 단일 인스턴스만 실행.** 다중 바인드는 TXG 계정 정지 사유.
+docker-compose.yml의 `deploy.replicas: 1`이 강제하지만 수동 `docker run` 등으로 추가 실행하면 안 됨.
 
-TXG 프로바이더가 미설정이면 즉시 200 + `{ polled: 0, updated: 0, skipped: "provider_not_configured" }` 를 반환합니다 (cron 실패로 처리되지 않음).
+워커는 활성 SMS 프로바이더가 `txg`일 때만 PENDING 행을 처리합니다 (관리자 패널에서 활성 프로바이더 변경 시 워커 재시작 불필요).
 
 ---
 
-## 3. TXG Push DLR 웹훅 등록 (cron 아님, 참고용)
-
-TXG 관리 패널에서 콜백 URL을 다음과 같이 등록합니다.
-
-```
-URL:    https://{도메인}/api/txg/report
-Method: PUT
-Header: x-txg-token: {TXG_DLR_SECRET}
-```
-
-`TXG_DLR_SECRET`은 `openssl rand -base64 32` 로 생성한 값을 `.env`와 TXG 관리 패널 양쪽에 동일하게 입력해야 합니다.
-미설정 시 DLR 요청을 전면 거부합니다 (503).
-
----
-
-## 4. 만료된 USDT 입금 정리 (`expire-deposits`)
+## 3. 만료된 USDT 입금 정리 (`expire-deposits`)
 
 기존 `POST /api/cron/expire-deposits`는 5분 간격으로 호출해 `expiresAt` 경과 입금을 `EXPIRED` 처리합니다. 세부 설정은 본 장 1절과 동일 패턴입니다.

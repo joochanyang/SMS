@@ -79,6 +79,24 @@ export async function processCampaignBatch(
 
   // 활성 프로바이더를 먼저 로드하여 배치 상한의 기준값으로 사용한다.
   const provider = await getActiveProvider();
+
+  // TXG는 SMPP 워커(services/smpp-worker)가 단독 처리한다.
+  // Next.js 측에서 직접 sendBatch 호출 시 TxgSendBatchUnsupportedError 가 발생하므로
+  // 여기서 fail-closed로 분기 — 워커가 PENDING 행을 폴링하여 비동기 처리할 것.
+  if (provider.name === "txg") {
+    const remaining = await prisma.smsLog.count({
+      where: {
+        campaignId,
+        status: { in: ["PENDING", "RETRY_PENDING", "SENDING"] },
+      },
+    });
+    return {
+      processed: 0,
+      remaining,
+      status: campaign.status,
+    };
+  }
+
   const providerMaxBatch = Math.max(1, provider.maxBatchSize);
 
   const effectiveBatchSizeInput = batchSize

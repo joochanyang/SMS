@@ -8,7 +8,7 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-const publicPaths = ["/api/auth", "/api/infobip/dlr", "/api/cron", "/api/txg/report", "/api/health", "/register"];
+const publicPaths = ["/api/auth", "/api/infobip/dlr", "/api/cron", "/api/health", "/register"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -18,7 +18,7 @@ export async function proxy(req: NextRequest) {
     const origin = req.headers.get("origin");
     const host = req.headers.get("host");
     // 외부 웹훅/콜백은 Origin 헤더가 없으므로 CSRF 예외
-    const csrfExempt = ["/api/infobip/dlr", "/api/cron", "/api/txg/report"];
+    const csrfExempt = ["/api/infobip/dlr", "/api/cron"];
     if (!csrfExempt.some((p) => pathname.startsWith(p))) {
       if (!origin) {
         // Origin 헤더 없는 상태 변경 요청 차단
