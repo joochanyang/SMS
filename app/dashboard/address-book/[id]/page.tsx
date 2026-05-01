@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Send, Upload, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, Upload, Pencil, Check, X, Download } from 'lucide-react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 type Contact = {
   id: string;
@@ -72,32 +73,87 @@ export default function AddressBookDetailPage() {
     if (res.ok) { setSelected(new Set()); fetchBook(); }
   };
 
+  const submitImportedContacts = async (
+    rows: Record<string, string | number | undefined>[],
+  ) => {
+    const toStr = (v: string | number | undefined) =>
+      v == null ? '' : typeof v === 'string' ? v : String(v);
+    const mapped = rows
+      .map((r) => ({
+        phone: toStr(r['번호'] ?? r['phone'] ?? r['연락처']).trim(),
+        name: toStr(r['이름'] ?? r['name']).trim(),
+        nickname: toStr(r['별명'] ?? r['nickname'] ?? r['별칭']).trim(),
+      }))
+      .filter((c) => c.phone);
+
+    if (mapped.length === 0) { alert('유효한 연락처가 없습니다. 헤더(이름/별명/번호)를 확인하세요.'); return; }
+
+    const res = await fetch(`/api/address-book/${bookId}/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contacts: mapped }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      alert(`${data.imported}명이 추가되었습니다.`);
+      fetchBook();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || '연락처 추가에 실패했습니다.');
+    }
+  };
+
   const handleCsvImport = (file: File) => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: async (result) => {
-        const rows = result.data as Record<string, string>[];
-        const mapped = rows.map((r) => ({
-          phone: r['번호'] || r['phone'] || r['연락처'] || '',
-          name: r['이름'] || r['name'] || '',
-          nickname: r['별명'] || r['nickname'] || r['별칭'] || '',
-        })).filter((c) => c.phone.trim());
-
-        if (mapped.length === 0) { alert('유효한 연락처가 없습니다.'); return; }
-
-        const res = await fetch(`/api/address-book/${bookId}/contacts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contacts: mapped }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          alert(`${data.imported}명이 추가되었습니다.`);
-          fetchBook();
-        }
+      complete: (result) => {
+        submitImportedContacts(result.data as Record<string, string>[]);
       },
+      error: () => alert('CSV 파싱에 실패했습니다. 파일 형식을 확인하세요.'),
     });
+  };
+
+  const handleExcelImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        if (!sheet) { alert('엑셀 시트를 찾을 수 없습니다.'); return; }
+        const rows = XLSX.utils.sheet_to_json<Record<string, string | number | undefined>>(
+          sheet,
+          { defval: '', raw: false },
+        );
+        submitImportedContacts(rows);
+      } catch {
+        alert('엑셀 파싱에 실패했습니다. 파일 형식을 확인하세요.');
+      }
+    };
+    reader.onerror = () => alert('파일을 읽지 못했습니다.');
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleFileImport = (file: File) => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      handleExcelImport(file);
+    } else {
+      handleCsvImport(file);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['이름', '별명', '번호'],
+      ['홍길동', '길동이', '+821012345678'],
+      ['김철수', '철수', '+821098765432'],
+    ]);
+    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '주소록');
+    XLSX.writeFile(wb, '주소록_양식.xlsx');
   };
 
   const startEdit = (c: Contact) => {
@@ -163,7 +219,7 @@ export default function AddressBookDetailPage() {
         </button>
       </div>
 
-      {/* 연락처 추가 + CSV */}
+      {/* 연락처 추가 + 엑셀/CSV */}
       <div className="glass-card" style={{ padding: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="이름" style={{ ...inputStyle, width: '120px' }} />
         <input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder="별명" style={{ ...inputStyle, width: '120px' }} />
@@ -192,11 +248,24 @@ export default function AddressBookDetailPage() {
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem',
           }}
         >
-          <Upload size={14} /> CSV 가져오기
+          <Upload size={14} /> 엑셀/CSV 가져오기
+        </button>
+        <button
+          onClick={handleDownloadTemplate}
+          style={{
+            padding: '0.5rem 1rem', borderRadius: '6px',
+            border: '1px solid var(--border)', backgroundColor: 'transparent',
+            color: 'var(--text-main)', fontWeight: 600, fontSize: '0.85rem',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem',
+          }}
+        >
+          <Download size={14} /> 양식 다운(엑셀)
         </button>
         <input
-          ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCsvImport(f); e.target.value = ''; }}
+          ref={fileRef} type="file"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+          style={{ display: 'none' }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileImport(f); e.target.value = ''; }}
         />
       </div>
 
