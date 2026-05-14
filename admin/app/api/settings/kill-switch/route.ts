@@ -8,6 +8,10 @@ import { requireSudo } from '@/lib/sudo';
 import { sendAlert } from '@/lib/notifications';
 import { handleApiError } from '@shared/api-error';
 
+type KillSwitchSetting = {
+  level?: 'NORMAL' | 'GLOBAL_PAUSE' | 'GLOBAL_STOP';
+};
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -24,7 +28,7 @@ const killSwitchSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const admin = await requireAuth(request);
+    await requireAuth(request);
 
     const setting = await prisma.systemSetting.findUnique({
       where: { key: 'kill_switch' },
@@ -34,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       level: typeof level === 'object' && level !== null && 'level' in level
-        ? (level as any).level
+        ? (level as KillSwitchSetting).level
         : level,
       updatedAt: setting?.updatedAt ?? null,
       updatedById: setting?.updatedById ?? null,

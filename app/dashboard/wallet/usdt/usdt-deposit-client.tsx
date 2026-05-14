@@ -21,15 +21,23 @@ interface DepositData {
 
 type Step = 'amount' | 'payment' | 'verify' | 'complete';
 
-export default function UsdtDepositClient() {
+interface UsdtDepositClientProps {
+  costPerMessageKrw: number;
+}
+
+function ceilToSixDecimals(value: number) {
+  return Math.ceil(value * 1_000_000) / 1_000_000;
+}
+
+export default function UsdtDepositClient({ costPerMessageKrw }: UsdtDepositClientProps) {
   const router = useRouter();
   const { priceData, connected } = useUpbitPrice();
 
   // 단계 관리
   const [step, setStep] = useState<Step>('amount');
 
-  // Step 1: 수량 입력
-  const [usdtAmount, setUsdtAmount] = useState('');
+  // Step 1: 발송건수 입력
+  const [messageCount, setMessageCount] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Step 2: 입금 대기
@@ -53,8 +61,14 @@ export default function UsdtDepositClient() {
 
   // 실시간 KRW 환산 금액
   const currentPrice = priceData?.price || 0;
-  const inputAmount = parseFloat(usdtAmount) || 0;
-  const estimatedKrw = Math.round(inputAmount * currentPrice);
+  const requestedMessageCount = Math.floor(Number(messageCount)) || 0;
+  const estimatedKrw = Math.round(requestedMessageCount * costPerMessageKrw);
+  const rawEstimatedUsdt = currentPrice > 0 ? estimatedKrw / currentPrice : 0;
+  const estimatedUsdt = rawEstimatedUsdt > 0 ? ceilToSixDecimals(Math.max(1, rawEstimatedUsdt)) : 0;
+  const estimatedCoveredMessages =
+    currentPrice > 0 && costPerMessageKrw > 0
+      ? Math.floor((estimatedUsdt * currentPrice) / costPerMessageKrw)
+      : 0;
 
 
   // 타이머
@@ -74,14 +88,14 @@ export default function UsdtDepositClient() {
 
   // 입금 신청
   const handleCreateDeposit = async () => {
-    if (!inputAmount || inputAmount < 1) return;
+    if (!requestedMessageCount || requestedMessageCount < 1) return;
     setLoading(true);
 
     try {
       const res = await fetch('/api/usdt/deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usdtAmount: inputAmount }),
+        body: JSON.stringify({ messageCount: requestedMessageCount }),
       });
 
       const data = await res.json();
@@ -157,8 +171,8 @@ export default function UsdtDepositClient() {
     }
   };
 
-  // 금액 프리셋
-  const presets = [10, 50, 100, 500, 1000];
+  // 발송건수 프리셋
+  const presets = [1000, 5000, 10000, 50000, 100000];
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -259,12 +273,12 @@ export default function UsdtDepositClient() {
         })}
       </div>
 
-      {/* Step 1: 수량 입력 */}
+      {/* Step 1: 발송건수 입력 */}
       {step === 'amount' && (
         <div className="glass-card" style={{ padding: '2rem' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111827' }}>
             <Zap size={20} color="#4F46E5" />
-            USDT 입금 수량 입력
+            충전할 발송건수 입력
           </h3>
 
           {/* 프리셋 버튼 */}
@@ -272,32 +286,31 @@ export default function UsdtDepositClient() {
             {presets.map((p) => (
               <button
                 key={p}
-                onClick={() => setUsdtAmount(String(p))}
+                onClick={() => setMessageCount(String(p))}
                 style={{
                   padding: '0.75rem 1.25rem', borderRadius: '8px',
                   fontSize: '0.9rem', fontWeight: 600,
                   backgroundColor: '#FFFFFF',
-                  color: usdtAmount === String(p) ? '#4F46E5' : '#4B5563',
-                  border: usdtAmount === String(p) ? '2px solid #4F46E5' : '1px solid #E5E7EB',
+                  color: messageCount === String(p) ? '#4F46E5' : '#4B5563',
+                  border: messageCount === String(p) ? '2px solid #4F46E5' : '1px solid #E5E7EB',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                 }}
               >
-                {p} USDT
+                {p.toLocaleString()}건
               </button>
             ))}
           </div>
 
-          {/* 수량 입력 */}
+          {/* 발송건수 입력 */}
           <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
             <input
               type="number"
-              value={usdtAmount}
-              onChange={(e) => setUsdtAmount(e.target.value)}
-              placeholder="USDT 수량을 입력하세요"
+              value={messageCount}
+              onChange={(e) => setMessageCount(e.target.value.replace(/\D/g, ''))}
+              placeholder="충전할 발송건수를 입력하세요"
               min="1"
-              max="100000"
-              step="any"
+              step="1"
               style={{
                 width: '100%',
                 backgroundColor: 'var(--surface)',
@@ -314,12 +327,12 @@ export default function UsdtDepositClient() {
               position: 'absolute', right: '1.5rem', top: '50%', transform: 'translateY(-50%)',
               color: '#9CA3AF', fontSize: '0.9rem', fontWeight: 600,
             }}>
-              USDT
+              건
             </div>
           </div>
 
           {/* 실시간 환산 */}
-          {inputAmount > 0 && currentPrice > 0 && (
+          {requestedMessageCount > 0 && currentPrice > 0 && (
             <div style={{
               padding: '1.25rem',
               backgroundColor: '#F9FAFB',
@@ -328,8 +341,12 @@ export default function UsdtDepositClient() {
               marginBottom: '1.5rem',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>입금 수량</span>
-                <span style={{ fontWeight: 600 }}>{inputAmount.toLocaleString()} USDT</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>신청 발송건수</span>
+                <span style={{ fontWeight: 600 }}>{requestedMessageCount.toLocaleString()}건</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>메시지 단가</span>
+                <span style={{ fontWeight: 600 }}>₩{costPerMessageKrw.toLocaleString()}/건</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>적용 환율</span>
@@ -337,12 +354,22 @@ export default function UsdtDepositClient() {
               </div>
               <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>KRW 환산 금액</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>필요 KRW 금액</span>
                 <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>₩{estimatedKrw.toLocaleString()}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
-                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>{estimatedKrw > 0 ? Math.floor(estimatedKrw / 14).toLocaleString() : 0}건</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>입금 필요 수량</span>
+                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>
+                  {estimatedUsdt.toLocaleString(undefined, { maximumFractionDigits: 6 })} USDT
+                </span>
+              </div>
+              {estimatedCoveredMessages > requestedMessageCount && (
+                <div style={{ marginTop: '0.75rem', color: '#6B7280', fontSize: '0.78rem', textAlign: 'right' }}>
+                  최소 1 USDT 정책으로 약 {estimatedCoveredMessages.toLocaleString()}건까지 충전됩니다.
+                </div>
+              )}
+              <div style={{ marginTop: '0.75rem', color: '#6B7280', fontSize: '0.78rem', textAlign: 'right' }}>
+                실제 입금 요청 시점의 서버 시세로 수량이 확정됩니다.
               </div>
             </div>
           )}
@@ -360,7 +387,8 @@ export default function UsdtDepositClient() {
               <li>오직 <strong>TRON(TRC20)</strong> 네트워크만 지원됩니다.</li>
               <li>ERC20 등 다른 네트워크로 보내면 <strong>복구가 불가능</strong>합니다.</li>
               <li>시세는 입금 신청 시점에 고정(Lock)되며, <strong>15분간</strong> 유효합니다.</li>
-              <li>최소 입금 수량: <strong>1 USDT</strong></li>
+              <li>발송건수 기준으로 필요한 <strong>USDT 입금 수량</strong>이 자동 계산됩니다.</li>
+              <li>최소 입금 수량 정책: <strong>1 USDT</strong></li>
             </ul>
           </div>
 
@@ -381,17 +409,17 @@ export default function UsdtDepositClient() {
           <button
             className="btn-primary"
             onClick={handleCreateDeposit}
-            disabled={loading || inputAmount < 1 || currentPrice <= 0}
+            disabled={loading || requestedMessageCount < 1 || currentPrice <= 0}
             style={{
               width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-              opacity: (loading || inputAmount < 1 || currentPrice <= 0) ? 0.5 : 1,
+              opacity: (loading || requestedMessageCount < 1 || currentPrice <= 0) ? 0.5 : 1,
             }}
           >
             {loading ? (
               <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 처리 중...</>
             ) : (
-              <>입금 신청 <ArrowRight size={18} /></>
+              <>USDT 입금 수량 확정 <ArrowRight size={18} /></>
             )}
           </button>
         </div>
@@ -442,7 +470,9 @@ export default function UsdtDepositClient() {
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
-              <span style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--primary)' }}>{deposit.krwAmount > 0 ? Math.floor(deposit.krwAmount / 14).toLocaleString() : 0}건</span>
+              <span style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--primary)' }}>
+                {deposit.krwAmount > 0 ? Math.floor(deposit.krwAmount / costPerMessageKrw).toLocaleString() : 0}건
+              </span>
             </div>
           </div>
 
@@ -651,7 +681,9 @@ export default function UsdtDepositClient() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>충전 건수</span>
-              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{deposit?.krwAmount ? Math.floor(deposit.krwAmount / 14).toLocaleString() : 0}건</span>
+              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                {deposit?.krwAmount ? Math.floor(deposit.krwAmount / costPerMessageKrw).toLocaleString() : 0}건
+              </span>
             </div>
             <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.5rem 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -667,7 +699,7 @@ export default function UsdtDepositClient() {
                 setStep('amount');
                 setDeposit(null);
                 setTxid('');
-                setUsdtAmount('');
+                setMessageCount('');
                 setVerifyResult(null);
               }}
               style={{ flex: 1, padding: '1rem', fontWeight: 600, cursor: 'pointer' }}

@@ -85,7 +85,7 @@ export default function TemplatesPage() {
   async function handleReview() {
     setReviewLoading(true);
     try {
-      const body: any = { action: reviewModal.action };
+      const body: { action: string; rejectReason?: string } = { action: reviewModal.action };
       if (reviewModal.action === 'REJECT') body.rejectReason = rejectReason;
 
       const res = await fetch(`/api/templates/${reviewModal.id}`, {

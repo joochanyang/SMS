@@ -36,7 +36,17 @@ const PROVIDER_LABELS: Record<string, string> = {
 const PROVIDER_DESCRIPTIONS: Record<string, string> = {
   infobip: '글로벌 CPaaS — 트라이얼 무료 크레딧 지원, 안정적인 DLR 웹훅',
   smsto: '저가형 글로벌 SMS — 건당 ~$0.009, DLR 웹훅 + API 폴링 지원',
-  txg: 'TXG-TEL HTTP API — 네이티브 배치 발송(최대 1만건), Push DLR 지원',
+  txg: 'TXG-TEL SMPP — 전용 워커가 submit_sm 발송과 in-band DLR 수신 처리',
+};
+
+type SendTestResult = {
+  success?: boolean;
+  result?: {
+    messageId?: string;
+    error?: string;
+  };
+  error?: string;
+  requireSudo?: boolean;
 };
 
 export default function SmsProvidersPage() {
@@ -62,8 +72,9 @@ export default function SmsProvidersPage() {
   const [sendTo, setSendTo] = useState('');
   const [sendMessage, setSendMessage] = useState('SovereignSMS 테스트 발송입니다.');
   const [sendLoading, setSendLoading] = useState(false);
-  const [sendResult, setSendResult] = useState<any>(null);
+  const [sendResult, setSendResult] = useState<SendTestResult | null>(null);
   const [showSudoModal, setShowSudoModal] = useState(false);
+  const [sudoRetryAction, setSudoRetryAction] = useState<'switch' | 'send-test' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -128,8 +139,13 @@ export default function SmsProvidersPage() {
         setSwitchReason('');
         await fetchData();
       } else {
-        const data = await res.json();
-        alert(data.error || '변경 실패');
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('switch');
+          setShowSudoModal(true);
+        } else {
+          alert(data.error || '변경 실패');
+        }
       }
     } catch {
       alert('요청 처리 중 오류가 발생했습니다.');
@@ -151,6 +167,7 @@ export default function SmsProvidersPage() {
       });
       const data = await res.json();
       if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction('send-test');
         setShowSudoModal(true);
       } else {
         setSendResult(data);
@@ -361,10 +378,18 @@ export default function SmsProvidersPage() {
 
       <SudoModal
         isOpen={showSudoModal}
-        onClose={() => setShowSudoModal(false)}
+        onClose={() => {
+          setShowSudoModal(false);
+          setSudoRetryAction(null);
+        }}
         onSuccess={async () => {
           setShowSudoModal(false);
-          await handleSendTest();
+          if (sudoRetryAction === 'switch') {
+            await handleSwitch();
+          } else if (sudoRetryAction === 'send-test') {
+            await handleSendTest();
+          }
+          setSudoRetryAction(null);
         }}
       />
 

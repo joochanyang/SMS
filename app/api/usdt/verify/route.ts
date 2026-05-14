@@ -105,9 +105,9 @@ export async function POST(req: NextRequest) {
         where: { id: deposit.id },
         data: { status: "VERIFYING", txid: txidClean },
       });
-    } catch (err: any) {
+    } catch (err) {
       // P2002: Unique constraint violation — 동시 요청으로 같은 TXID가 먼저 할당됨
-      if (err?.code === "P2002") {
+      if ((err as { code?: string })?.code === "P2002") {
         return NextResponse.json(
           { error: "이미 처리된 트랜잭션입니다." },
           { status: 409 }
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     // 4. 모든 검증 통과 → 즉시 충전!
     const result = await prisma.$transaction(async (tx) => {
       // 입금 상태 업데이트
-      const updatedDeposit = await tx.usdtDeposit.update({
+      await tx.usdtDeposit.update({
         where: { id: deposit.id },
         data: {
           status: "CONFIRMED",

@@ -38,7 +38,7 @@ async function main() {
 
   const pool = new Pool({ connectionString: databaseUrl });
   const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter } as any);
+  const prisma = new PrismaClient({ adapter });
 
   try {
     console.log(DRY_RUN ? "🔍 [DRY RUN 모드] 실제 삭제하지 않습니다.\n" : "⚠️  [실행 모드] 데이터가 삭제됩니다.\n");

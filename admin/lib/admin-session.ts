@@ -13,7 +13,7 @@ const SESSION_ABSOLUTE_MS = 8 * 60 * 60 * 1000; // 8 hours
 import { getClientIp as sharedGetClientIp } from '@shared/client-ip';
 
 export function getClientIp(req: NextRequest): string {
-  const ip = sharedGetClientIp(req, 'claimed');
+  const ip = sharedGetClientIp(req, 'trusted');
   return ip === 'unknown' ? '127.0.0.1' : ip;
 }
 

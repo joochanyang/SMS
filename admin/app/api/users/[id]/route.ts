@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
-import { requirePermission } from '@/lib/rbac';
+import { requirePermission, requireRole } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 
 // ---------------------------------------------------------------------------
@@ -13,7 +15,7 @@ import { handleApiError } from '@shared/api-error';
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
-  costPerMessage: z.number().min(0).optional(),
+  costPerMessage: z.number().positive('건당 단가는 0보다 커야 합니다.').optional(),
   dailySendLimit: z.number().int().min(0).optional(),
   maxCampaignSize: z.number().int().min(0).optional(),
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
@@ -29,7 +31,26 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     requirePermission(admin, 'user:read');
     const { id } = await context.params;
 
-    const user = await prisma.user.findUnique({ where: { id } });
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        credits: true,
+        status: true,
+        suspendedAt: true,
+        suspendReason: true,
+        costPerMessage: true,
+        dailySendLimit: true,
+        maxCampaignSize: true,
+        failedLoginCount: true,
+        lockedUntil: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     if (!user) return NextResponse.json({ error: '유저를 찾을 수 없습니다.' }, { status: 404 });
 
     const recentLedger = await prisma.creditLedger.findMany({
@@ -54,8 +75,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       },
     });
 
-    const { passwordHash, ...safeUser } = user;
-    return NextResponse.json({ user: safeUser, recentLedger, recentCampaigns });
+    return NextResponse.json({ user, recentLedger, recentCampaigns });
   } catch (err) {
     return handleApiError(err, 'users/[id]');
   }
@@ -82,17 +102,37 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     const { name, costPerMessage, dailySendLimit, maxCampaignSize, reason } = parsed.data;
+    if (costPerMessage !== undefined) {
+      requireRole(admin, 'SUPER_ADMIN');
+      await requireSudo(req, admin);
+      if (!reason) {
+        return NextResponse.json({ error: '건당 단가 변경 사유를 입력하세요.' }, { status: 400 });
+      }
+    }
 
     const current = await prisma.user.findUnique({ where: { id } });
     if (!current) {
       return NextResponse.json({ error: '유저를 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
-    if (costPerMessage !== undefined) updateData.costPerMessage = costPerMessage;
-    if (dailySendLimit !== undefined) updateData.dailySendLimit = dailySendLimit;
-    if (maxCampaignSize !== undefined) updateData.maxCampaignSize = maxCampaignSize;
+    const updateData: Prisma.UserUpdateInput = {};
+    const auditNewValue: Record<string, string | number> = {};
+    if (name !== undefined) {
+      updateData.name = name;
+      auditNewValue.name = name;
+    }
+    if (costPerMessage !== undefined) {
+      updateData.costPerMessage = costPerMessage;
+      auditNewValue.costPerMessage = costPerMessage;
+    }
+    if (dailySendLimit !== undefined) {
+      updateData.dailySendLimit = dailySendLimit;
+      auditNewValue.dailySendLimit = dailySendLimit;
+    }
+    if (maxCampaignSize !== undefined) {
+      updateData.maxCampaignSize = maxCampaignSize;
+      auditNewValue.maxCampaignSize = maxCampaignSize;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: '변경할 항목이 없습니다.' }, { status: 400 });
@@ -121,7 +161,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         dailySendLimit: current.dailySendLimit,
         maxCampaignSize: current.maxCampaignSize,
       },
-      newValue: updateData,
+      newValue: auditNewValue,
     });
 
     return NextResponse.json({ user: updated });

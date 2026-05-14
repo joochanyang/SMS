@@ -6,6 +6,7 @@ import { logAdminAction } from '@/lib/audit';
 import { getProviderByName } from '@shared/sms-providers/router';
 import type { SmsProviderName } from '@shared/sms-providers/types';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 const VALID_PROVIDER_NAMES: SmsProviderName[] = ['infobip', 'smsto', 'txg'];
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       providerName,
       `테스트 발송: ${to}`,
       request,
-      { metadata: result },
+      { metadata: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue },
     );
 
     return NextResponse.json({

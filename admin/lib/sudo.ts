@@ -6,7 +6,7 @@
  * password verification.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@shared/prisma';
 import { verifyPassword } from '@/lib/admin-auth';
 
@@ -18,6 +18,12 @@ interface AdminUser {
 }
 
 const SUDO_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+
+type SudoError = Error & {
+  status?: number;
+  code?: 'UNAUTHORIZED' | 'SUDO_REQUIRED';
+  requireSudo?: boolean;
+};
 
 /**
  * Extract the session token from the request cookie.
@@ -33,11 +39,13 @@ function getSessionToken(req: NextRequest): string | null {
  * so the frontend can prompt for password re-entry.
  */
 export async function requireSudo(req: NextRequest, admin: AdminUser): Promise<void> {
+  void admin;
+
   const token = getSessionToken(req);
   if (!token) {
-    const error = new Error('세션이 없습니다.');
-    (error as any).status = 401;
-    (error as any).code = 'UNAUTHORIZED';
+    const error = new Error('세션이 없습니다.') as SudoError;
+    error.status = 401;
+    error.code = 'UNAUTHORIZED';
     throw error;
   }
 
@@ -47,18 +55,18 @@ export async function requireSudo(req: NextRequest, admin: AdminUser): Promise<v
   });
 
   if (!session) {
-    const error = new Error('유효하지 않은 세션입니다.');
-    (error as any).status = 401;
-    (error as any).code = 'UNAUTHORIZED';
+    const error = new Error('유효하지 않은 세션입니다.') as SudoError;
+    error.status = 401;
+    error.code = 'UNAUTHORIZED';
     throw error;
   }
 
   const now = new Date();
   if (!session.sudoUntil || session.sudoUntil <= now) {
-    const error = new Error('Sudo 모드가 필요합니다.');
-    (error as any).status = 403;
-    (error as any).code = 'SUDO_REQUIRED';
-    (error as any).requireSudo = true;
+    const error = new Error('Sudo 모드가 필요합니다.') as SudoError;
+    error.status = 403;
+    error.code = 'SUDO_REQUIRED';
+    error.requireSudo = true;
     throw error;
   }
 }

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
+import { logAdminAction } from '@/lib/audit';
+
+const MAX_EXPORT_ROWS = 50_000;
 
 // ---------------------------------------------------------------------------
 // GET /api/campaigns/[id]/export — CSV 내보내기 (전체 발송 로그)
@@ -28,7 +31,28 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: '캠페인을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    // 전체 로그 조회 (제한 없음 — 엑셀 추출용)
+    const totalLogs = await prisma.smsLog.count({ where: { campaignId: id } });
+    if (totalLogs > MAX_EXPORT_ROWS) {
+      await logAdminAction(
+        admin,
+        'CAMPAIGN_EXPORT_DENIED',
+        'SmsCampaign',
+        id,
+        `CSV 내보내기 제한 초과: ${totalLogs}건`,
+        req,
+        {
+          result: 'FAILURE',
+          metadata: { totalLogs, maxExportRows: MAX_EXPORT_ROWS },
+        },
+      );
+
+      return NextResponse.json(
+        { error: `CSV 내보내기는 최대 ${MAX_EXPORT_ROWS.toLocaleString('ko-KR')}건까지 가능합니다. 현재 ${totalLogs.toLocaleString('ko-KR')}건입니다.` },
+        { status: 413 },
+      );
+    }
+
+    // 전체 로그 조회 (상한 적용)
     const logs = await prisma.smsLog.findMany({
       where: { campaignId: id },
       orderBy: { createdAt: 'asc' },
@@ -75,7 +99,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return value;
     }
 
-    const headers = ['번호', '수신번호', '발송내용', '상태', '통신사', '통신사코드', '비용(USD)', '재시도', '오류', '발송시간'];
+    const headers = ['번호', '수신번호', '발송내용', '상태', '통신사', '통신사코드', '비용(KRW)', '재시도', '오류', '발송시간'];
     const csvRows = [headers.join(',')];
 
     for (let i = 0; i < logs.length; i++) {
@@ -102,6 +126,23 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const filename = `${safeName}_${dateStr}.csv`;
 
+    await logAdminAction(
+      admin,
+      'CAMPAIGN_EXPORT',
+      'SmsCampaign',
+      id,
+      `CSV 내보내기: ${campaign.name ?? id}`,
+      req,
+      {
+        metadata: {
+          totalLogs,
+          campaignName: campaign.name,
+          campaignStatus: campaign.status,
+          userEmail: campaign.user.email,
+        },
+      },
+    );
+
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
@@ -111,7 +152,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     });
   } catch (err) {
     if (err instanceof Error) {
-      const status = (err as any).status;
+      const status = (err as { status?: number }).status;
       if (status === 401 || status === 403) {
         return NextResponse.json({ error: err.message }, { status });
       }

@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "admin", "scripts", "test-txg.ts", "test-txg-format.ts", "test-txg-report.ts"]
+  "exclude": ["node_modules", "admin", "scripts"]
 }

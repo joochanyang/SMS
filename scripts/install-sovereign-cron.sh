@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /etc/cron.d/sovereign-sms 에 캠페인/DLR 폴링/USDT 만료 cron을 설치한다.
+# /etc/cron.d/sovereign-sms 에 캠페인/USDT 만료 cron을 설치한다.
 # 사용: CRON_SECRET=xxxxx ./scripts/install-sovereign-cron.sh
 # 서버에서 root 권한으로 실행 (ssh로 업로드 후).
 set -euo pipefail
@@ -14,13 +14,10 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # 캠페인 자동 진행 — 매 1분
-* * * * * root curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" $BASE_URL/api/cron/process-campaigns -m 50 >> /var/log/sovereign-cron.log 2>&1
+* * * * * root curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" $BASE_URL/api/cron/process-campaigns -m 50 >> /var/log/sovereign-cron.log 2>&1; echo >> /var/log/sovereign-cron.log
 
-# TXG DLR 폴링 — 매 5분
-*/5 * * * * root curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" $BASE_URL/api/cron/txg-poll-reports -m 120 >> /var/log/sovereign-cron.log 2>&1
-
-# USDT 입금 만료 정리 — 매 10분
-*/10 * * * * root curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" $BASE_URL/api/cron/expire-deposits -m 30 >> /var/log/sovereign-cron.log 2>&1
+# USDT 입금 만료 정리 — 매 5분
+*/5 * * * * root curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" $BASE_URL/api/cron/expire-deposits -m 30 >> /var/log/sovereign-cron.log 2>&1; echo >> /var/log/sovereign-cron.log
 EOF
 
 chmod 644 "$FILE"

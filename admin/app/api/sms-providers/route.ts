@@ -3,11 +3,22 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import { getAllProviders, getProviderByName } from '@shared/sms-providers/router';
 import type { SmsProviderName } from '@shared/sms-providers/types';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 const VALID_PROVIDER_NAMES: SmsProviderName[] = ['infobip', 'smsto', 'txg'];
+
+type ProviderConfig = {
+  enabled?: boolean;
+  priority?: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/sms-providers — 프로바이더 목록 + 활성 프로바이더 조회
@@ -23,17 +34,25 @@ export async function GET(request: NextRequest) {
       prisma.systemSetting.findUnique({ where: { key: 'sms_provider_configs' } }),
     ]);
 
-    const activeProvider = ((activeSetting?.value as any)?.provider ?? 'infobip') as string;
-    const configs = (configsSetting?.value ?? {}) as Record<string, any>;
+    const activeValue = activeSetting?.value;
+    const activeProvider =
+      isRecord(activeValue) && typeof activeValue.provider === 'string'
+        ? activeValue.provider
+        : 'infobip';
+    const configs = isRecord(configsSetting?.value) ? configsSetting.value : {};
 
-    const providers = getAllProviders().map(({ name, provider }) => ({
-      name,
-      isConfigured: provider.isConfigured(),
-      isActive: name === activeProvider,
-      enabled: configs[name]?.enabled ?? (name === 'infobip'),
-      priority: configs[name]?.priority ?? 99,
-      maxBatchSize: provider.maxBatchSize,
-    }));
+    const providers = getAllProviders().map(({ name, provider }) => {
+      const rawConfig = configs[name];
+      const config: ProviderConfig = isRecord(rawConfig) ? rawConfig : {};
+      return {
+        name,
+        isConfigured: provider.isConfigured(),
+        isActive: name === activeProvider,
+        enabled: config.enabled ?? (name === 'infobip'),
+        priority: config.priority ?? 99,
+        maxBatchSize: provider.maxBatchSize,
+      };
+    });
 
     return NextResponse.json({ providers, activeProvider });
   } catch (err) {
@@ -49,6 +68,7 @@ export async function PUT(request: NextRequest) {
   try {
     const admin = await requireAuth(request);
     requirePermission(admin, 'setting:update');
+    await requireSudo(request, admin);
 
     const body = await request.json();
     const { provider, reason } = body;
@@ -103,7 +123,7 @@ export async function PUT(request: NextRequest) {
       reason,
       request,
       {
-        previousValue: prev?.value,
+        previousValue: prev?.value as Prisma.InputJsonValue | undefined,
         newValue: { provider },
       },
     );

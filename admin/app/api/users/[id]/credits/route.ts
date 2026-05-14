@@ -5,7 +5,6 @@ import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { requireSudo } from '@/lib/sudo';
-import crypto from 'crypto';
 import { handleApiError } from '@shared/api-error';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +24,7 @@ const creditAdjustSchema = z
     count: z.number().int().min(1, '1건 이상 입력하세요.').max(1_000_000, '최대 1,000,000건까지 가능합니다.').optional(),
     type: z.enum(['ADMIN_ADD', 'ADMIN_DEDUCT', 'CORRECTION', 'BONUS']),
     reason: z.string().min(10, '사유를 10자 이상 입력하세요.'),
-    idempotencyKey: z.string().min(1, '멱등성 키를 입력하세요.').optional(),
+    idempotencyKey: z.string().uuid('유효한 멱등성 키를 입력하세요.'),
   })
   .refine(
     (d) => {
@@ -34,6 +33,14 @@ const creditAdjustSchema = z
     },
     { message: '단위에 맞는 값을 입력하세요.' },
   );
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function getKstDayRange(now = new Date()): { start: Date; end: Date } {
+  const startMs = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS) * DAY_MS - KST_OFFSET_MS;
+  return { start: new Date(startMs), end: new Date(startMs + DAY_MS) };
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/users/[id]/credits — Credit adjustment (CRITICAL)
@@ -73,19 +80,21 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }
     }
 
-    // Generate idempotency key if not provided
-    const idemKey = idempotencyKey ?? crypto.randomUUID();
-
     // Check idempotency — prevent duplicate operations
     const existingLedger = await prisma.creditLedger.findUnique({
-      where: { idempotencyKey: idemKey },
+      where: { idempotencyKey },
     });
 
     if (existingLedger) {
-      return NextResponse.json(
-        { error: '이미 처리된 요청입니다.', ledger: existingLedger },
-        { status: 409 },
-      );
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        newBalance: existingLedger.balanceAfter,
+        adjustment: existingLedger.amount,
+        unit,
+        count: unit === 'COUNT' ? count : undefined,
+        ledger: existingLedger,
+      });
     }
 
     const isDeduction =
@@ -93,6 +102,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     // CRITICAL: Atomic transaction — balance check + credit update + ledger entry
     const result = await prisma.$transaction(async (tx) => {
+      const adminRecord = await tx.adminUser.findUnique({
+        where: { id: admin.id },
+        select: { id: true, dailyCreditLimit: true },
+      });
+
+      if (!adminRecord) {
+        throw Object.assign(new Error('관리자 계정을 찾을 수 없습니다.'), { status: 401 });
+      }
+
       // Balance check INSIDE transaction to prevent TOCTOU
       const user = await tx.user.findUnique({
         where: { id },
@@ -137,6 +155,29 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }
 
       const creditChange = isDeduction ? -absAmount : absAmount;
+      if (creditChange > 0) {
+        const { start, end } = getKstDayRange();
+        const todaySum = await tx.creditLedger.aggregate({
+          where: {
+            adminId: admin.id,
+            referenceType: 'ADMIN_ADJUSTMENT',
+            amount: { gt: 0 },
+            createdAt: { gte: start, lt: end },
+          },
+          _sum: { amount: true },
+        });
+
+        const usedToday = Number(todaySum._sum.amount ?? 0);
+        const dailyLimit = Number(adminRecord.dailyCreditLimit);
+        if (usedToday + creditChange > dailyLimit) {
+          throw Object.assign(
+            new Error(
+              `관리자 일일 지급 한도 초과: 한도 ${dailyLimit.toLocaleString('ko-KR')}원, 오늘 사용 ${usedToday.toLocaleString('ko-KR')}원, 요청 ${creditChange.toLocaleString('ko-KR')}원`,
+            ),
+            { status: 403 },
+          );
+        }
+      }
 
       const updatedUser = await tx.user.update({
         where: { id },
@@ -159,7 +200,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           referenceId: admin.id,
           description,
           adminId: admin.id,
-          idempotencyKey: idemKey,
+          idempotencyKey,
         },
       });
 
@@ -176,7 +217,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         count: unit === 'COUNT' ? count : undefined,
         costPerMessage: result.costPerMessage,
         type,
-        idempotencyKey: idemKey,
+        idempotencyKey,
         ledgerId: result.ledger.id,
       },
     });
@@ -191,11 +232,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       costPerMessage: result.costPerMessage,
       ledger: result.ledger,
     });
-  } catch (err: any) {
-    if (err?.status && err?.message) {
-      const response: any = { error: err.message };
-      if (err.requireSudo) response.requireSudo = true;
-      return NextResponse.json(response, { status: err.status });
+  } catch (err) {
+    const apiError = err as { status?: number; message?: string; requireSudo?: boolean };
+    if (apiError.status && apiError.message) {
+      const response: { error: string; requireSudo?: boolean } = { error: apiError.message };
+      if (apiError.requireSudo) response.requireSudo = true;
+      return NextResponse.json(response, { status: apiError.status });
     }
     return handleApiError(err, 'users/[id]/credits');
   }

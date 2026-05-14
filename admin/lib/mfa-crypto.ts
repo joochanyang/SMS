@@ -2,7 +2,7 @@
  * MFA 시크릿 암호화/복호화 모듈 (AES-256-GCM)
  *
  * DB 유출 시 MFA 시크릿 보호를 위해 at-rest 암호화를 적용한다.
- * 환경 변수 MFA_ENCRYPTION_KEY가 없으면 경고 로그 후 평문 반환 (하위호환).
+ * 환경 변수 MFA_ENCRYPTION_KEY가 없으면 새 암호화/복호화를 fail-closed 처리한다.
  */
 
 import crypto from 'crypto';
@@ -35,7 +35,7 @@ function getEncryptionKey(): Buffer | null {
  * MFA 시크릿을 AES-256-GCM으로 암호화한다.
  * 반환 형식: `iv:authTag:ciphertext` (모두 hex)
  *
- * MFA_ENCRYPTION_KEY가 없으면 경고 로그 후 평문 그대로 반환.
+ * MFA_ENCRYPTION_KEY가 없으면 예외를 던진다.
  */
 export function encryptMfaSecret(plainSecret: string): string {
   const key = getEncryptionKey();
@@ -58,7 +58,8 @@ export function encryptMfaSecret(plainSecret: string): string {
  * 암호화된 MFA 시크릿을 복호화한다.
  * 입력 형식: `iv:authTag:ciphertext` (모두 hex)
  *
- * MFA_ENCRYPTION_KEY가 없거나 형식이 맞지 않으면 평문으로 간주하여 그대로 반환.
+ * MFA_ENCRYPTION_KEY가 없으면 예외를 던진다.
+ * 형식이 맞지 않으면 기존 평문 데이터로 간주하여 그대로 반환한다.
  */
 export function decryptMfaSecret(encrypted: string): string {
   const key = getEncryptionKey();

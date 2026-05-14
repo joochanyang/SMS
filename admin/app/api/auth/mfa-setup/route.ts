@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@shared/prisma';
 import * as OTPAuth from 'otpauth';
 import crypto from 'crypto';
-import { generateBackupCodes, hashPassword } from '@/lib/admin-auth';
+import { generateBackupCodes } from '@/lib/admin-auth';
 import { requireAuth, getClientIp, getClientUserAgent } from '@/lib/admin-session';
 import { AuthError } from '@/lib/admin-session';
 import { encryptMfaSecret, decryptMfaSecret } from '@/lib/mfa-crypto';

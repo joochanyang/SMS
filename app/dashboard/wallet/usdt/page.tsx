@@ -35,12 +35,19 @@ export default async function UsdtDepositPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  // 최근 USDT 입금 내역 조회
-  const deposits = await prisma.usdtDeposit.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
+  const [deposits, user] = await Promise.all([
+    prisma.usdtDeposit.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { costPerMessage: true },
+    }),
+  ]);
+
+  const costPerMessageKrw = Number(user?.costPerMessage ?? 14);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '720px', margin: '0 auto' }}>
@@ -65,7 +72,7 @@ export default async function UsdtDepositPage() {
       </div>
 
       {/* 클라이언트 입금 컴포넌트 */}
-      <UsdtDepositClient />
+      <UsdtDepositClient costPerMessageKrw={costPerMessageKrw} />
 
       {/* 최근 입금 내역 */}
       {deposits.length > 0 && (
@@ -93,7 +100,7 @@ export default async function UsdtDepositPage() {
                         {Number(d.usdtAmount)} USDT → ${Number(d.creditAmount).toFixed(2)}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        ₩{Number(d.exchangeRate).toLocaleString()}/USDT • {formatDate(d.createdAt)}
+                        약 {Math.floor(Number(d.krwAmount) / costPerMessageKrw).toLocaleString()}건 • ₩{Number(d.exchangeRate).toLocaleString()}/USDT • {formatDate(d.createdAt)}
                       </div>
                       {d.txid && (
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>

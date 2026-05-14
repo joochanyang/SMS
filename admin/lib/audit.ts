@@ -7,6 +7,7 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@shared/prisma';
+import type { Prisma } from '@prisma/client';
 
 interface AdminUser {
   id: string;
@@ -21,12 +22,12 @@ export interface AuditParams {
   action: string;
   targetType: string;
   targetId?: string;
-  previousValue?: any;
-  newValue?: any;
+  previousValue?: Prisma.InputJsonValue;
+  newValue?: Prisma.InputJsonValue;
   reason: string;
   req: NextRequest;
   result?: 'SUCCESS' | 'FAILURE';
-  metadata?: any;
+  metadata?: Prisma.InputJsonValue;
 }
 
 import { getClientIp } from '@shared/client-ip';
@@ -91,10 +92,10 @@ export async function logAdminAction(
   reason: string,
   req: NextRequest,
   opts?: {
-    previousValue?: any;
-    newValue?: any;
+    previousValue?: Prisma.InputJsonValue;
+    newValue?: Prisma.InputJsonValue;
     result?: 'SUCCESS' | 'FAILURE';
-    metadata?: any;
+    metadata?: Prisma.InputJsonValue;
   },
 ): Promise<void> {
   await logAudit({

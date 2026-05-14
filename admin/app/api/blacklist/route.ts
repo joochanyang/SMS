@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import crypto from 'crypto';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -13,6 +14,13 @@ import { handleApiError } from '@shared/api-error';
 
 function hashPhone(phone: string): string {
   return crypto.createHash('sha256').update(phone).digest('hex');
+}
+
+function normalizePhone(phone: string): string {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return trimmed;
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
 }
 
 function maskPhone(phone: string): string {
@@ -67,11 +75,11 @@ export async function GET(request: NextRequest) {
 
     const { phone, type, page, limit } = parsed.data;
 
-    const where: any = {};
+    const where: Prisma.BlacklistWhereInput = {};
 
     if (phone) {
       // Search by hash for exact match
-      where.phoneHash = hashPhone(phone);
+      where.phoneHash = hashPhone(normalizePhone(phone));
     }
 
     if (type) {
@@ -122,7 +130,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { phoneNumber, type, reason, isGlobal, userId } = parsed.data;
-    const phoneHash = hashPhone(phoneNumber);
+    const normalizedPhoneNumber = normalizePhone(phoneNumber);
+    if (normalizedPhoneNumber.replace(/\D/g, '').length < 8) {
+      return NextResponse.json({ error: '유효한 전화번호를 입력하세요.' }, { status: 400 });
+    }
+    const phoneHash = hashPhone(normalizedPhoneNumber);
 
     // Check if already exists
     const existing = await prisma.blacklist.findFirst({
@@ -141,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     const entry = await prisma.blacklist.create({
       data: {
-        phoneNumber,
+        phoneNumber: normalizedPhoneNumber,
         phoneHash,
         type,
         reason,
@@ -160,7 +172,7 @@ export async function POST(request: NextRequest) {
       request,
       {
         newValue: {
-          phoneNumber: maskPhone(phoneNumber),
+          phoneNumber: maskPhone(normalizedPhoneNumber),
           type,
           isGlobal,
           userId,

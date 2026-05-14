@@ -39,7 +39,7 @@ interface ProviderStats {
     total: number;
     last24h: number;
   };
-  // 최근 24h에 TXG 폴링 한도 초과로 DELIVERY_UNKNOWN 처리된 건수
+  // 최근 24h에 전달 판정 불가로 DELIVERY_UNKNOWN 처리된 건수
   deliveryUnknown24h: number;
 }
 
@@ -567,7 +567,7 @@ export default function DashboardClient() {
                       {deliveryUnknown24h.toLocaleString('ko-KR')}건
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      TXG DLR 폴링 한도 초과로 FAILED+DELIVERY_UNKNOWN 종결
+                      DLR 미확정으로 FAILED+DELIVERY_UNKNOWN 종결
                     </div>
                   </div>
                 )}

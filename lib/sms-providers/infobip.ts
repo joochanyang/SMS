@@ -5,6 +5,24 @@
 import { Infobip, AuthType } from '@infobip-api/sdk';
 import type { SmsProvider, SmsSendRequest, SmsSendResult, SmsProviderBalance } from './types';
 
+type InfobipResponseMessage = {
+  messageId?: unknown;
+  message_id?: unknown;
+  id?: unknown;
+  status?: {
+    name?: unknown;
+    groupName?: unknown;
+    description?: unknown;
+  };
+};
+
+type InfobipSendResponse = {
+  messages?: InfobipResponseMessage[];
+  data?: {
+    messages?: InfobipResponseMessage[];
+  };
+};
+
 export class InfobipProvider implements SmsProvider {
   readonly name = 'infobip' as const;
   readonly maxBatchSize = 200;
@@ -29,15 +47,15 @@ export class InfobipProvider implements SmsProvider {
   async sendBatch(messages: SmsSendRequest[]): Promise<SmsSendResult[]> {
     const client = this.getClient();
 
-    const response: any = await client.channels.sms.send({
+    const response = await client.channels.sms.send({
       messages: messages.map((msg) => ({
         from: msg.from || 'SovereignSMS',
         destinations: [{ to: msg.to }],
         text: msg.text,
       })),
-    } as any);
+    } as unknown as Parameters<typeof client.channels.sms.send>[0]) as InfobipSendResponse;
 
-    const responseMessages: any[] =
+    const responseMessages: InfobipResponseMessage[] =
       (Array.isArray(response?.messages) && response.messages) ||
       (Array.isArray(response?.data?.messages) && response.data.messages) ||
       [];

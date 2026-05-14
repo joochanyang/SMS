@@ -26,6 +26,13 @@ interface AdminUser {
   name: string;
 }
 
+type PermissionError = Error & {
+  status?: number;
+  code?: 'FORBIDDEN';
+  requiredPermission?: Permission;
+  requiredRole?: AdminRole;
+};
+
 /** Role hierarchy — higher index = more powerful */
 const ROLE_HIERARCHY: AdminRole[] = ['VIEWER', 'SUPPORT', 'ADMIN', 'SUPER_ADMIN'];
 
@@ -80,10 +87,10 @@ export function hasPermission(role: string, permission: Permission): boolean {
  */
 export function requirePermission(admin: AdminUser, permission: Permission): void {
   if (!hasPermission(admin.role, permission)) {
-    const error = new Error(`권한 부족: ${permission} 권한이 필요합니다.`);
-    (error as any).status = 403;
-    (error as any).code = 'FORBIDDEN';
-    (error as any).requiredPermission = permission;
+    const error = new Error(`권한 부족: ${permission} 권한이 필요합니다.`) as PermissionError;
+    error.status = 403;
+    error.code = 'FORBIDDEN';
+    error.requiredPermission = permission;
     throw error;
   }
 }
@@ -96,10 +103,10 @@ export function requireRole(admin: AdminUser, minRole: AdminRole): void {
   const requiredIdx = ROLE_HIERARCHY.indexOf(minRole);
 
   if (adminIdx === -1 || adminIdx < requiredIdx) {
-    const error = new Error(`권한 부족: 최소 ${minRole} 역할이 필요합니다.`);
-    (error as any).status = 403;
-    (error as any).code = 'FORBIDDEN';
-    (error as any).requiredRole = minRole;
+    const error = new Error(`권한 부족: 최소 ${minRole} 역할이 필요합니다.`) as PermissionError;
+    error.status = 403;
+    error.code = 'FORBIDDEN';
+    error.requiredRole = minRole;
     throw error;
   }
 }

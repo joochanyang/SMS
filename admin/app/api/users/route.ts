@@ -4,18 +4,13 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
-import { validatePasswordPolicy } from '@/lib/admin-auth';
 import bcrypt from 'bcryptjs';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function maskPhone(phone: string): string {
-  if (!phone || phone.length < 8) return '***';
-  return phone.slice(0, 3) + '-****-' + phone.slice(-4);
-}
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split('@');
@@ -44,10 +39,9 @@ const createUserSchema = z.object({
   email: z.string().email('유효한 이메일을 입력하세요.'),
   name: z.string().min(1, '이름을 입력하세요.'),
   password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
-  credits: z.number().min(0).optional().default(0),
   dailySendLimit: z.number().int().min(0).optional(),
   maxCampaignSize: z.number().int().min(0).optional(),
-});
+}).strict();
 
 // ---------------------------------------------------------------------------
 // GET /api/users — List users
@@ -72,7 +66,7 @@ export async function GET(request: NextRequest) {
     const { search, status, minCredits, maxCredits, sortBy, sortOrder, page, limit } = parsed.data;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -147,7 +141,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, name, password, credits, dailySendLimit, maxCampaignSize } = parsed.data;
+    const { email, name, password, dailySendLimit, maxCampaignSize } = parsed.data;
 
     // Check duplicate by username OR email (username is unique, email column is not)
     const existing = await prisma.user.findFirst({
@@ -167,7 +161,7 @@ export async function POST(request: NextRequest) {
         email,
         name,
         passwordHash,
-        credits,
+        credits: 0,
         ...(dailySendLimit !== undefined && { dailySendLimit }),
         ...(maxCampaignSize !== undefined && { maxCampaignSize }),
       },
@@ -184,7 +178,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAdminAction(admin, 'USER_CREATE', 'User', user.id, `유저 생성: ${email}`, request, {
-      newValue: { email, name, credits, dailySendLimit, maxCampaignSize },
+      newValue: { email, name, credits: 0, dailySendLimit, maxCampaignSize },
     });
 
     return NextResponse.json({ user }, { status: 201 });

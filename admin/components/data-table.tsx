@@ -23,7 +23,7 @@ interface DataTableProps<T> {
   keyExtractor?: (row: T) => string;
 }
 
-export default function DataTable<T extends Record<string, any>>({
+export default function DataTable<T extends object>({
   columns,
   data,
   onSort,
@@ -120,7 +120,7 @@ export default function DataTable<T extends Record<string, any>>({
                 <td key={col.key}>
                   {col.render
                     ? col.render(row, idx)
-                    : String(row[col.key] ?? '')}
+                    : String((row as Record<string, unknown>)[col.key] ?? '')}
                 </td>
               ))}
             </tr>

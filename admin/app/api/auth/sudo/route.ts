@@ -71,9 +71,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ sudoUntil });
-  } catch (err: any) {
-    if (err?.status === 401) {
-      return NextResponse.json({ error: err.message }, { status: 401 });
+  } catch (err) {
+    const apiError = err as { status?: number; message?: string };
+    if (apiError.status === 401) {
+      return NextResponse.json({ error: apiError.message }, { status: 401 });
     }
     console.error('[SUDO] Unexpected error:', err);
     return NextResponse.json(

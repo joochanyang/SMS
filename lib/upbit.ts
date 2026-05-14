@@ -26,6 +26,17 @@ let cachedTicker: {
   timestamp: number;
   fetchedAt: number;
 } | null = null;
+
+function tickerWithoutFetchTime(ticker: NonNullable<typeof cachedTicker>) {
+  return {
+    price: ticker.price,
+    changeRate: ticker.changeRate,
+    changePrice: ticker.changePrice,
+    volume24h: ticker.volume24h,
+    timestamp: ticker.timestamp,
+  };
+}
+
 const CACHE_TTL_MS = 5000;
 const TICKER_MAX_STALENESS_MS = 5 * 60 * 1000; // 5분
 
@@ -42,8 +53,7 @@ export async function getUsdtKrwPrice(): Promise<{
 }> {
   // 캐시 체크 (fetchedAt 기준)
   if (cachedTicker && Date.now() - cachedTicker.fetchedAt < CACHE_TTL_MS) {
-    const { fetchedAt: _fa, ...rest } = cachedTicker;
-    return rest;
+    return tickerWithoutFetchTime(cachedTicker);
   }
 
   try {
@@ -73,14 +83,12 @@ export async function getUsdtKrwPrice(): Promise<{
       fetchedAt: Date.now(),
     };
 
-    const { fetchedAt: _fa, ...rest } = cachedTicker;
-    return rest;
+    return tickerWithoutFetchTime(cachedTicker);
   } catch (error) {
     // 캐시가 있고 staleness 한도(5분) 이내면 stale 반환
     if (cachedTicker && Date.now() - cachedTicker.fetchedAt < TICKER_MAX_STALENESS_MS) {
       logger.warn('[Upbit] REST API failed, using stale cache', { error: toLogError(error) });
-      const { fetchedAt: _fa, ...rest } = cachedTicker;
-      return rest;
+      return tickerWithoutFetchTime(cachedTicker);
     }
     // 한도 초과 또는 캐시 없음 → 거부
     throw error;

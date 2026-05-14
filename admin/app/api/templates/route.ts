@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const { status, userId, page, limit } = parsed.data;
 
-    const where: any = {};
+    const where: Prisma.MessageTemplateWhereInput = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
 

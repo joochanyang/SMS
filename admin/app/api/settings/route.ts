@@ -4,7 +4,18 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
+
+type SettingListItem = {
+  key: string;
+  value: Prisma.JsonValue | string;
+  description: string | null;
+  isSensitive: boolean;
+  updatedAt: Date;
+  updatedById: string | null;
+};
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -31,7 +42,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Group by category
-    const grouped: Record<string, any[]> = {};
+    const grouped: Record<string, SettingListItem[]> = {};
     for (const s of settings) {
       if (!grouped[s.category]) grouped[s.category] = [];
       grouped[s.category].push({
@@ -58,6 +69,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const admin = await requireAuth(request);
     requirePermission(admin, 'setting:update');
+    await requireSudo(request, admin);
 
     const body = await request.json();
     const parsed = updateSettingSchema.safeParse(body);
@@ -70,6 +82,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { key, value, reason } = parsed.data;
+    if (key === 'kill_switch' || key === 'active_sms_provider') {
+      return NextResponse.json(
+        { error: '이 설정은 전용 관리 화면에서만 변경할 수 있습니다.' },
+        { status: 400 },
+      );
+    }
 
     // Get current value for audit
     const current = await prisma.systemSetting.findUnique({
@@ -96,8 +114,8 @@ export async function PATCH(request: NextRequest) {
       reason,
       request,
       {
-        previousValue: current.isSensitive ? '[SENSITIVE]' : current.value,
-        newValue: current.isSensitive ? '[SENSITIVE]' : value,
+        previousValue: current.isSensitive ? '[SENSITIVE]' : (current.value as Prisma.InputJsonValue),
+        newValue: current.isSensitive ? '[SENSITIVE]' : (value as Prisma.InputJsonValue),
       },
     );
 

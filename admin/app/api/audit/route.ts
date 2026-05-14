@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, isRoleAtLeast } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     const { adminId, action, targetType, targetId, dateFrom, dateTo, result, page, limit } = parsed.data;
 
-    const where: any = {};
+    const where: Prisma.AuditLogWhereInput = {};
 
     // ADMIN sees own logs only, SUPER_ADMIN sees all
     if (!isRoleAtLeast(admin.role, 'SUPER_ADMIN')) {

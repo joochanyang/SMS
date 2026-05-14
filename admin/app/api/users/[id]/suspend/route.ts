@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/admin-session';
 import { requirePermission } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     const now = new Date();
     let newStatus: string;
-    let updateData: any;
+    let updateData: Prisma.UserUpdateInput;
 
     switch (action) {
       case 'SUSPEND':

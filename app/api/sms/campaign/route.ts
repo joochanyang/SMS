@@ -28,6 +28,17 @@ type CreateCampaignBody = {
   scheduledAt?: string;
 };
 
+type KillSwitchValue = {
+  level?: string;
+};
+
+function readKillSwitchLevel(value: unknown): string {
+  if (typeof value === "object" && value !== null && "level" in value) {
+    return String((value as KillSwitchValue).level ?? "NORMAL");
+  }
+  return "NORMAL";
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Rate limit: 분당 10회, 시간당 100회
@@ -41,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     // Kill Switch 확인
     const killSwitch = await prisma.systemSetting.findUnique({ where: { key: 'kill_switch' } });
-    const ksLevel = (killSwitch?.value as any)?.level ?? 'NORMAL';
+    const ksLevel = readKillSwitchLevel(killSwitch?.value);
     if (ksLevel === 'GLOBAL_STOP' || ksLevel === 'GLOBAL_PAUSE') {
       return NextResponse.json({ error: "서비스가 일시 중지되었습니다." }, { status: 503 });
     }
@@ -236,9 +247,9 @@ export async function POST(req: NextRequest) {
           data: { credits: { decrement: estimatedCost } },
           select: { credits: true },
         });
-      } catch (e: any) {
+      } catch (e) {
         // Prisma P2025: 조건에 맞는 레코드 없음 = 크레딧 부족
-        if (e?.code === 'P2025') {
+        if ((e as { code?: string })?.code === 'P2025') {
           throw new Error("INSUFFICIENT_CREDITS");
         }
         throw e;

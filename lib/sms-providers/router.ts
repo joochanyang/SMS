@@ -15,6 +15,10 @@ const PROVIDERS: Record<SmsProviderName, () => SmsProvider> = {
   txg: () => new TxgProvider(),
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * SystemSetting 테이블에서 활성 SMS 프로바이더를 조회하여 인스턴스를 반환한다.
  * 설정이 없으면 기본값으로 infobip을 사용한다.
@@ -24,7 +28,11 @@ export async function getActiveProvider(): Promise<SmsProvider> {
     where: { key: 'active_sms_provider' },
   });
 
-  const providerName = ((setting?.value as any)?.provider ?? 'infobip') as SmsProviderName;
+  const rawProvider =
+    isRecord(setting?.value) && typeof setting.value.provider === 'string'
+      ? setting.value.provider
+      : 'infobip';
+  const providerName = rawProvider in PROVIDERS ? (rawProvider as SmsProviderName) : 'infobip';
   const factory = PROVIDERS[providerName];
 
   if (!factory) {

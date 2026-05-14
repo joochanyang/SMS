@@ -114,7 +114,7 @@ describe('TRC20 트랜잭션 검증 모듈', () => {
       expect(result.error).toContain('입금 주소가 일치하지 않습니다');
     });
 
-    it('주소 비교는 대소문자를 무시한다', async () => {
+    it('Base58 주소 비교는 대소문자를 구분한다', async () => {
       const addr = 'TAbCdEf123456';
 
       vi.mocked(fetch).mockResolvedValueOnce({
@@ -142,8 +142,7 @@ describe('TRC20 트랜잭션 검증 모듈', () => {
       } as Response);
 
       const result = await verifyTRC20Transaction(VALID_TXID, addr.toUpperCase(), 100);
-      // 대소문자 무시이므로 주소 검증 통과, 금액 검증으로 넘어감
-      expect(result.error ?? '').not.toContain('입금 주소가 일치하지 않습니다');
+      expect(result.error ?? '').toContain('입금 주소가 일치하지 않습니다');
     });
   });
 

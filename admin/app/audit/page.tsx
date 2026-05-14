@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { History, ChevronDown, ChevronUp } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
@@ -16,8 +16,8 @@ interface AuditRow {
   action: string;
   targetType: string;
   targetId: string | null;
-  previousValue: any;
-  newValue: any;
+  previousValue: unknown;
+  newValue: unknown;
   reason: string;
   ipAddress: string;
   result: string;
@@ -172,7 +172,7 @@ export default function AuditPage() {
               return (
                 <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '8px', margin: '0 0 16px 0' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    {row.previousValue && (
+                    {row.previousValue !== null && row.previousValue !== undefined && (
                       <div>
                         <span className="label">이전 값</span>
                         <pre style={{ fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginTop: '4px' }}>
@@ -180,7 +180,7 @@ export default function AuditPage() {
                         </pre>
                       </div>
                     )}
-                    {row.newValue && (
+                    {row.newValue !== null && row.newValue !== undefined && (
                       <div>
                         <span className="label">새 값</span>
                         <pre style={{ fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginTop: '4px' }}>

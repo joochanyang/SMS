@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, AlertCircle, Download, CheckCircle, Copy } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -18,11 +18,7 @@ export default function MfaSetupPage() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    fetchSetup();
-  }, []);
-
-  async function fetchSetup() {
+  const fetchSetup = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/mfa-setup');
       if (!res.ok) {
@@ -50,7 +46,11 @@ export default function MfaSetupPage() {
       setError('서버와 통신할 수 없습니다.');
       setStep('scan');
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    fetchSetup();
+  }, [fetchSetup]);
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
@@ -141,6 +141,8 @@ export default function MfaSetupPage() {
 
             {qrDataUrl && (
               <div className="mfa-qr-wrapper">
+                {/* QR code is a generated data URL and should not go through Next image optimization. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={qrDataUrl} alt="2단계 인증 QR 코드" width={200} height={200} />
               </div>
             )}

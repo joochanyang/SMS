@@ -57,6 +57,7 @@ export class TxgProvider implements SmsProvider {
    * (인터페이스 호환을 위해 시그니처는 유지하되 실제 호출은 막음)
    */
   async sendBatch(_messages: SmsSendRequest[]): Promise<SmsSendResult[]> {
+    void _messages;
     throw new TxgSendBatchUnsupportedError();
   }
 

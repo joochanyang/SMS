@@ -13,7 +13,7 @@ interface AdminInfo { name: string; email: string; role: string }
 
 interface SettingItem {
   key: string;
-  value: any;
+  value: unknown;
   description: string | null;
   isSensitive: boolean;
   updatedAt: string;
@@ -38,7 +38,7 @@ export default function SettingsPage() {
   const [killReason, setKillReason] = useState('');
   const [killLoading, setKillLoading] = useState(false);
   const [showSudoModal, setShowSudoModal] = useState(false);
-  const [sudoRetryAction, setSudoRetryAction] = useState<'kill-switch' | null>(null);
+  const [sudoRetryAction, setSudoRetryAction] = useState<'setting' | 'kill-switch' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -71,7 +71,7 @@ export default function SettingsPage() {
     if (editReason.length < 5) return;
     setEditLoading(true);
     try {
-      let parsedValue: any = editValue;
+      let parsedValue: unknown = editValue;
       try { parsedValue = JSON.parse(editValue); } catch { /* keep as string */ }
 
       const res = await fetch('/api/settings', {
@@ -85,6 +85,15 @@ export default function SettingsPage() {
         setEditValue('');
         setEditReason('');
         await fetchData();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction('setting');
+        setShowSudoModal(true);
+      } else {
+        alert(data.error || '설정 저장에 실패했습니다.');
       }
     } finally {
       setEditLoading(false);
@@ -255,6 +264,8 @@ export default function SettingsPage() {
           setShowSudoModal(false);
           if (sudoRetryAction === 'kill-switch') {
             await handleKillSwitch();
+          } else if (sudoRetryAction === 'setting') {
+            await handleSave();
           }
           setSudoRetryAction(null);
         }}

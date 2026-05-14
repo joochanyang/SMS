@@ -3,7 +3,8 @@
  * 
  * POST /api/usdt/deposit
  * 
- * 사용자가 입금할 USDT 수량을 확정하고, 입금 시점의 시세를 Lock합니다.
+ * 사용자가 충전할 발송건수를 입력하면 필요한 USDT 수량을 확정하고,
+ * 입금 시점의 시세를 Lock합니다.
  * 시세 Lock 유효 기간: 15분 (환경변수로 설정 가능)
  */
 
@@ -14,6 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { withRateLimit } from "@/lib/api-rate-limit";
 import { getUsdtKrwPrice, krwToUsd } from "@/lib/upbit";
 import { logger, toLogError } from "@/lib/logger";
+
+function ceilToSixDecimals(value: number) {
+  return Math.ceil(value * 1_000_000) / 1_000_000;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,19 +32,27 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const usdtAmount = parseFloat(body.usdtAmount);
+    const hasMessageCount =
+      body.messageCount !== undefined && body.messageCount !== null && body.messageCount !== "";
+    const requestedMessageCount = hasMessageCount ? Number(body.messageCount) : null;
+    let usdtAmount = parseFloat(body.usdtAmount);
 
     // 입력 검증
-    if (!usdtAmount || isNaN(usdtAmount) || usdtAmount <= 0) {
+    if (hasMessageCount) {
+      if (
+        !requestedMessageCount ||
+        !Number.isFinite(requestedMessageCount) ||
+        !Number.isInteger(requestedMessageCount) ||
+        requestedMessageCount <= 0
+      ) {
+        return NextResponse.json({ error: "유효한 발송건수를 입력하세요." }, { status: 400 });
+      }
+
+      if (requestedMessageCount > 100_000_000) {
+        return NextResponse.json({ error: "최대 충전 발송건수는 100,000,000건입니다." }, { status: 400 });
+      }
+    } else if (!usdtAmount || isNaN(usdtAmount) || usdtAmount <= 0) {
       return NextResponse.json({ error: "유효한 USDT 수량을 입력하세요." }, { status: 400 });
-    }
-
-    if (usdtAmount < 1) {
-      return NextResponse.json({ error: "최소 입금 수량은 1 USDT입니다." }, { status: 400 });
-    }
-
-    if (usdtAmount > 100000) {
-      return NextResponse.json({ error: "최대 입금 수량은 100,000 USDT입니다." }, { status: 400 });
     }
 
     // 현재 활성 입금 요청이 있는지 확인
@@ -61,6 +74,25 @@ export async function POST(req: NextRequest) {
     // Upbit 시세 조회 & Lock
     const priceData = await getUsdtKrwPrice();
     const exchangeRate = priceData.price;
+
+    if (hasMessageCount && requestedMessageCount) {
+      const userForCost = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { costPerMessage: true },
+      });
+      const costPerMessageKrw = Number(userForCost?.costPerMessage ?? 14);
+      const requiredKrw = requestedMessageCount * costPerMessageKrw;
+      usdtAmount = ceilToSixDecimals(Math.max(1, requiredKrw / exchangeRate));
+    }
+
+    if (usdtAmount < 1) {
+      return NextResponse.json({ error: "최소 입금 수량은 1 USDT입니다." }, { status: 400 });
+    }
+
+    if (usdtAmount > 100000) {
+      return NextResponse.json({ error: "최대 입금 수량은 100,000 USDT입니다." }, { status: 400 });
+    }
+
     const krwAmount = Math.round(usdtAmount * exchangeRate);
     const creditAmount = await krwToUsd(krwAmount);
 

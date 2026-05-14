@@ -79,8 +79,10 @@ export default function UserDetailPage() {
   const [creditType, setCreditType] = useState<'ADMIN_ADD' | 'ADMIN_DEDUCT'>('ADMIN_ADD');
   const [creditUnit, setCreditUnit] = useState<'KRW' | 'COUNT'>('KRW');
   const [creditReason, setCreditReason] = useState('');
+  const [creditRequestKey, setCreditRequestKey] = useState<string | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
   const [showSudoModal, setShowSudoModal] = useState(false);
+  const [sudoRetryAction, setSudoRetryAction] = useState<'credit' | 'edit' | null>(null);
 
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -144,10 +146,13 @@ export default function UserDetailPage() {
     if (creditUnit === 'COUNT' && !Number.isInteger(value)) return;
     setCreditLoading(true);
     try {
+      const idempotencyKey = creditRequestKey ?? crypto.randomUUID();
+      setCreditRequestKey(idempotencyKey);
       const body: Record<string, unknown> = {
         unit: creditUnit,
         type: creditType,
         reason: creditReason,
+        idempotencyKey,
       };
       if (creditUnit === 'COUNT') {
         body.count = value;
@@ -163,10 +168,12 @@ export default function UserDetailPage() {
         setCreditModal(false);
         setCreditAmount('');
         setCreditReason('');
+        setCreditRequestKey(null);
         await fetchData();
       } else {
         const data = await res.json().catch(() => ({}));
         if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('credit');
           setShowSudoModal(true);
         } else {
           alert(data.error || '처리에 실패했습니다.');
@@ -178,12 +185,24 @@ export default function UserDetailPage() {
   }
 
   async function handleEdit() {
-    if (editReason.length < 5) return;
+    if (editReason.length < 5 || !user) return;
     setEditLoading(true);
     try {
-      const body: any = { reason: editReason };
+      const canChangeCostPerMessage = admin?.role === 'SUPER_ADMIN';
+      const body: {
+        reason: string;
+        name?: string;
+        costPerMessage?: number;
+        dailySendLimit?: number;
+        maxCampaignSize?: number;
+      } = { reason: editReason };
       if (editName) body.name = editName;
-      if (editCostPerMessage) body.costPerMessage = parseFloat(editCostPerMessage);
+      if (canChangeCostPerMessage && editCostPerMessage) {
+        const nextCostPerMessage = parseFloat(editCostPerMessage);
+        if (nextCostPerMessage !== Number(user.costPerMessage)) {
+          body.costPerMessage = nextCostPerMessage;
+        }
+      }
       if (editDailyLimit) body.dailySendLimit = parseInt(editDailyLimit);
       if (editMaxCampaign) body.maxCampaignSize = parseInt(editMaxCampaign);
 
@@ -195,6 +214,14 @@ export default function UserDetailPage() {
       if (res.ok) {
         setEditModal(false);
         await fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('edit');
+          setShowSudoModal(true);
+        } else {
+          alert(data.error || '수정에 실패했습니다.');
+        }
       }
     } finally {
       setEditLoading(false);
@@ -254,6 +281,7 @@ export default function UserDetailPage() {
   }
 
   const canUpdateUser = hasPermission(admin.role, 'user:update');
+  const canChangeCostPerMessage = admin.role === 'SUPER_ADMIN';
   const canSuspendUser = hasPermission(admin.role, 'user:suspend');
   const canAdjustCredits = hasPermission(admin.role, 'credit:adjust_small') || hasPermission(admin.role, 'credit:adjust_large');
 
@@ -410,7 +438,7 @@ export default function UserDetailPage() {
 
       {/* Credit Adjustment Modal */}
       {creditModal && (
-        <div className="modal-overlay" onClick={() => setCreditModal(false)}>
+        <div className="modal-overlay" onClick={() => { setCreditModal(false); setCreditRequestKey(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
             <h3 style={{ marginBottom: '16px' }}>
               {creditType === 'ADMIN_ADD'
@@ -470,7 +498,7 @@ export default function UserDetailPage() {
                 />
               </div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setCreditModal(false)}>취소</button>
+                <button className="btn btn-ghost" onClick={() => { setCreditModal(false); setCreditRequestKey(null); }}>취소</button>
                 <button
                   className={`btn ${creditType === 'ADMIN_ADD' ? 'btn-primary' : 'btn-danger'}`}
                   disabled={creditLoading || !creditAmount || creditReason.length < 10}
@@ -497,7 +525,22 @@ export default function UserDetailPage() {
               </div>
               <div>
                 <label className="label">건당 단가 (원)</label>
-                <input className="input" type="number" min="0" step="1" value={editCostPerMessage} onChange={(e) => setEditCostPerMessage(e.target.value)} placeholder="14" style={{ width: '100%' }} />
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={editCostPerMessage}
+                  onChange={(e) => setEditCostPerMessage(e.target.value)}
+                  placeholder="14"
+                  disabled={!canChangeCostPerMessage}
+                  style={{ width: '100%' }}
+                />
+                {!canChangeCostPerMessage && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    건당 단가 변경은 최고 관리자 재인증 후 가능합니다.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">일일 발송 한도</label>
@@ -524,10 +567,18 @@ export default function UserDetailPage() {
 
       <SudoModal
         isOpen={showSudoModal}
-        onClose={() => setShowSudoModal(false)}
+        onClose={() => {
+          setShowSudoModal(false);
+          setSudoRetryAction(null);
+        }}
         onSuccess={async () => {
           setShowSudoModal(false);
-          await handleCreditAdjust();
+          if (sudoRetryAction === 'credit') {
+            await handleCreditAdjust();
+          } else if (sudoRetryAction === 'edit') {
+            await handleEdit();
+          }
+          setSudoRetryAction(null);
         }}
       />
     </div>

@@ -4,6 +4,7 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, requireRole } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import { hashPassword, validatePasswordPolicy } from '@/lib/admin-auth';
 import { handleApiError } from '@shared/api-error';
 
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
     const admin = await requireAuth(request);
     requirePermission(admin, 'admin:manage');
     requireRole(admin, 'SUPER_ADMIN');
+    await requireSudo(request, admin);
 
     const body = await request.json();
     const parsed = createAdminSchema.safeParse(body);

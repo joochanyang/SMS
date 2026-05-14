@@ -4,62 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, BookUser } from 'lucide-react';
-
-type RecipientWithVars = { phone: string; name?: string; nickname?: string };
-
-const GSM7_CHARS = new Set(
-  '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
-  'ÄÖÑÜabcdefghijklmnopqrstuvwxyzäöñüà§ÆæßÉ{|}~[\\]^€'
-);
-
-function isGsm7(text: string): boolean {
-  for (const ch of text) {
-    if (!GSM7_CHARS.has(ch)) return false;
-  }
-  return true;
-}
-
-function getSmsInfo(text: string) {
-  const gsm7 = isGsm7(text);
-  const charCount = text.length;
-  const singleMax = gsm7 ? 160 : 70;
-  const concatMax = gsm7 ? 153 : 67;
-  const parts = charCount <= singleMax ? (charCount > 0 ? 1 : 0) : Math.ceil(charCount / concatMax);
-  return {
-    encoding: gsm7 ? 'GSM-7' : 'UCS-2' as const,
-    charCount,
-    maxChars: singleMax,
-    parts,
-    remaining: singleMax - charCount,
-  };
-}
-
-function cleanPhoneInput(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('+')) {
-    return '+' + trimmed.slice(1).replace(/[^0-9]/g, '');
-  }
-  return trimmed.replace(/[^0-9]/g, '');
-}
-
-function isValidPhone(raw: string): boolean {
-  const cleaned = cleanPhoneInput(raw);
-  if (/^\+\d{7,15}$/.test(cleaned)) return true;
-  if (/^\d{7,15}$/.test(cleaned)) return true;
-  return false;
-}
-
-type CampaignProgress = {
-  id: string;
-  status: string;
-  processedCount: number;
-  totalRecipients: number;
-  failedCount: number;
-  deliveredCount: number;
-};
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { RotateCcw, AlertTriangle, Loader2, CheckCircle2, XCircle, BookUser } from 'lucide-react';
+import RecentCampaigns, { type RecentCampaign } from './recent-campaigns';
+import {
+  cleanPhoneInput,
+  getSmsInfo,
+  isValidPhone,
+  sleep,
+  type CampaignProgress,
+  type RecipientWithVars,
+} from './sms-send-utils';
 
 export default function SmsSendPage() {
   const searchParams = useSearchParams();
@@ -94,7 +48,6 @@ export default function SmsSendPage() {
   const cancelledRef = useRef(false);
 
   // 최근 발송 캠페인 목록 (최대 20개)
-  type RecentCampaign = { id: string; messageBody: string; status: string; totalRecipients: number; createdAt: string };
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
 
   const fetchRecentCampaigns = () => {
@@ -137,7 +90,7 @@ export default function SmsSendPage() {
         })
         .catch(() => {});
     }
-  }, []);
+  }, [searchParams]);
 
   const smsInfo = useMemo(() => getSmsInfo(message), [message]);
 
@@ -745,50 +698,11 @@ export default function SmsSendPage() {
         </div>
       )}
 
-      {/* Bottom Area: Recent Messages */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span>📩</span> 최근 발송된 메세지 ({recentCampaigns.length}건)
-        </h3>
-
-        {recentCampaigns.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-            발송 내역이 없습니다.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-            {recentCampaigns.map((c) => {
-              const statusLabel = c.status === 'COMPLETED' ? '전송완료' : c.status === 'FAILED' ? '실패' : c.status === 'CANCELLED' ? '취소' : c.status === 'SCHEDULED' ? '예약됨' : '처리중';
-              return (
-                <div key={c.id} style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', minHeight: '160px', position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button
-                      onClick={() => setMessage(c.messageBody)}
-                      style={{ color: '#4F46E5', fontWeight: 600, fontSize: '0.85rem', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', padding: 0 }}
-                    >
-                      ⊕ 불러오기
-                    </button>
-                    <span style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{new Date(c.createdAt).toLocaleString('ko-KR')}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>상태: {statusLabel} | {c.totalRecipients}건</span>
-                    <button
-                      onClick={() => handleDeleteCampaign(c.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px', display: 'flex', alignItems: 'center' }}
-                      title="삭제"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#374151', lineHeight: 1.5, whiteSpace: 'pre-line', overflow: 'hidden', flex: 1 }}>
-                    {c.messageBody}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <RecentCampaigns
+        campaigns={recentCampaigns}
+        onLoadMessage={setMessage}
+        onDeleteCampaign={handleDeleteCampaign}
+      />
 
     </div>
   );

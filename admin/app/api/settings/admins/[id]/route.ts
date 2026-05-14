@@ -4,7 +4,9 @@ import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
 import { requirePermission, requireRole } from '@/lib/rbac';
 import { logAdminAction } from '@/lib/audit';
+import { requireSudo } from '@/lib/sudo';
 import { handleApiError } from '@shared/api-error';
+import type { Prisma } from '@prisma/client';
 
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const admin = await requireAuth(req);
     requirePermission(admin, 'admin:manage');
     requireRole(admin, 'SUPER_ADMIN');
+    await requireSudo(req, admin);
     const { id } = await context.params;
 
     // Cannot modify self
@@ -57,11 +60,24 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'SUPER_ADMIN 계정은 수정할 수 없습니다.' }, { status: 403 });
     }
 
-    const updateData: any = {};
-    if (role !== undefined) updateData.role = role;
-    if (status !== undefined) updateData.status = status;
-    if (allowedIps !== undefined) updateData.allowedIps = allowedIps;
-    if (dailyCreditLimit !== undefined) updateData.dailyCreditLimit = dailyCreditLimit;
+    const updateData: Prisma.AdminUserUpdateInput = {};
+    const auditNewValue: Record<string, string | number | string[]> = {};
+    if (role !== undefined) {
+      updateData.role = role;
+      auditNewValue.role = role;
+    }
+    if (status !== undefined) {
+      updateData.status = status;
+      auditNewValue.status = status;
+    }
+    if (allowedIps !== undefined) {
+      updateData.allowedIps = allowedIps;
+      auditNewValue.allowedIps = allowedIps;
+    }
+    if (dailyCreditLimit !== undefined) {
+      updateData.dailyCreditLimit = dailyCreditLimit;
+      auditNewValue.dailyCreditLimit = dailyCreditLimit;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: '변경할 항목이 없습니다.' }, { status: 400 });
@@ -92,9 +108,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         role: targetAdmin.role,
         status: targetAdmin.status,
         allowedIps: targetAdmin.allowedIps,
-        dailyCreditLimit: targetAdmin.dailyCreditLimit,
+        dailyCreditLimit: Number(targetAdmin.dailyCreditLimit),
       },
-      newValue: updateData,
+      newValue: auditNewValue,
     });
 
     return NextResponse.json({ admin: updated });
@@ -112,6 +128,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const admin = await requireAuth(req);
     requirePermission(admin, 'admin:manage');
     requireRole(admin, 'SUPER_ADMIN');
+    await requireSudo(req, admin);
     const { id } = await context.params;
 
     // Cannot delete self

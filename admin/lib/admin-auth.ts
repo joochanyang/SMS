@@ -36,7 +36,6 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
  */
 export function validatePasswordPolicy(
   password: string,
-  previousPasswords: string[] = [],
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 

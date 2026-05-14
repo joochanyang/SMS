@@ -19,6 +19,17 @@ function clampInt(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
+type KillSwitchValue = {
+  level?: string;
+};
+
+function readKillSwitchLevel(value: unknown): string {
+  if (typeof value === "object" && value !== null && "level" in value) {
+    return String((value as KillSwitchValue).level ?? "NORMAL");
+  }
+  return "NORMAL";
+}
+
 export interface CampaignBatchResult {
   processed: number;
   remaining: number;
@@ -53,7 +64,7 @@ export async function processCampaignBatch(
 
   // Kill Switch 확인
   const killSwitch = await prisma.systemSetting.findUnique({ where: { key: 'kill_switch' } });
-  const ksLevel = (killSwitch?.value as any)?.level ?? 'NORMAL';
+  const ksLevel = readKillSwitchLevel(killSwitch?.value);
   if (ksLevel === 'GLOBAL_STOP' || ksLevel === 'GLOBAL_PAUSE') {
     throw new CampaignProcessError("서비스가 일시 중지되었습니다.", "KILL_SWITCH");
   }
@@ -431,12 +442,12 @@ export type CampaignErrorCode =
 
 export class CampaignProcessError extends Error {
   code: CampaignErrorCode;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 
   constructor(
     message: string,
     code: CampaignErrorCode,
-    meta?: Record<string, any>,
+    meta?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "CampaignProcessError";

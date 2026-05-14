@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -49,10 +49,6 @@ export default function Sidebar({ adminName, adminRole, killSwitchActive }: Side
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/';
@@ -113,6 +109,7 @@ export default function Sidebar({ adminName, adminRole, killSwitchActive }: Side
               className={`sidebar-link ${isActive(item.href) ? 'active' : ''}`}
               onClick={(e) => {
                 e.preventDefault();
+                setMobileOpen(false);
                 router.push(item.href);
               }}
             >

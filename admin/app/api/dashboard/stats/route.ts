@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
       prisma.smsLog.count({
         where: { providerName: null, createdAt: { gte: since24h } },
       }),
-      // TXG 폴링 한도 초과로 DELIVERY_UNKNOWN 처리된 로그 (최근 24h) — 전달 판정 불가 건수
+      // DELIVERY_UNKNOWN 처리된 로그 (최근 24h) — 전달 판정 불가 건수
       prisma.smsLog.count({
         where: {
           providerStatus: 'DELIVERY_UNKNOWN',

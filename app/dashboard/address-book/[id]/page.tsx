@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Send, Upload, Pencil, Check, X, Download } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import {
+  describeImportHeaders,
+  mapImportedContacts,
+  type ContactImportRow,
+} from './import-contacts';
 
 type Contact = {
   id: string;
@@ -38,16 +43,37 @@ export default function AddressBookDetailPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const fetchBook = async () => {
+  const fetchBook = useCallback(async () => {
     const res = await fetch(`/api/address-book/${bookId}`);
     if (!res.ok) { router.push('/dashboard/address-book'); return; }
     const data = await res.json();
     setBookName(data.name);
     setContacts(data.contacts);
     setLoading(false);
-  };
+  }, [bookId, router]);
 
-  useEffect(() => { fetchBook(); }, [bookId]);
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`/api/address-book/${bookId}`)
+      .then((res) => {
+        if (!res.ok) {
+          router.push('/dashboard/address-book');
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!data || cancelled) return;
+        setBookName(data.name);
+        setContacts(data.contacts);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId, router]);
 
   const handleAddContact = async () => {
     if (!newPhone.trim()) return;
@@ -73,20 +99,22 @@ export default function AddressBookDetailPage() {
     if (res.ok) { setSelected(new Set()); fetchBook(); }
   };
 
-  const submitImportedContacts = async (
-    rows: Record<string, string | number | undefined>[],
-  ) => {
-    const toStr = (v: string | number | undefined) =>
-      v == null ? '' : typeof v === 'string' ? v : String(v);
-    const mapped = rows
-      .map((r) => ({
-        phone: toStr(r['번호'] ?? r['phone'] ?? r['연락처']).trim(),
-        name: toStr(r['이름'] ?? r['name']).trim(),
-        nickname: toStr(r['별명'] ?? r['nickname'] ?? r['별칭']).trim(),
-      }))
-      .filter((c) => c.phone);
+  const submitImportedContacts = async (rows: ContactImportRow[]) => {
+    const detectedHeaders = describeImportHeaders(rows);
+    const mapped = mapImportedContacts(rows);
 
-    if (mapped.length === 0) { alert('유효한 연락처가 없습니다. 헤더(이름/별명/번호)를 확인하세요.'); return; }
+    if (mapped.length === 0) {
+      alert(`유효한 연락처가 없습니다.\n감지된 헤더: ${detectedHeaders}\n허용 헤더(번호/이름/별명 등) 중 하나가 있어야 합니다.`);
+      return;
+    }
+
+    const hasName = mapped.some((c) => c.name) || mapped.some((c) => c.nickname);
+    if (!hasName) {
+      const proceed = confirm(
+        `이름·별명이 모두 비어 있습니다. 감지된 헤더: ${detectedHeaders}\n번호만 등록할까요? (취소 시 헤더를 확인 후 다시 시도)`,
+      );
+      if (!proceed) return;
+    }
 
     const res = await fetch(`/api/address-book/${bookId}/contacts`, {
       method: 'POST',
@@ -108,7 +136,7 @@ export default function AddressBookDetailPage() {
       header: true,
       skipEmptyLines: true,
       complete: (result) => {
-        submitImportedContacts(result.data as Record<string, string>[]);
+        submitImportedContacts(result.data as ContactImportRow[]);
       },
       error: () => alert('CSV 파싱에 실패했습니다. 파일 형식을 확인하세요.'),
     });
@@ -122,7 +150,7 @@ export default function AddressBookDetailPage() {
         const wb = XLSX.read(data, { type: 'array' });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         if (!sheet) { alert('엑셀 시트를 찾을 수 없습니다.'); return; }
-        const rows = XLSX.utils.sheet_to_json<Record<string, string | number | undefined>>(
+        const rows = XLSX.utils.sheet_to_json<ContactImportRow>(
           sheet,
           { defval: '', raw: false },
         );

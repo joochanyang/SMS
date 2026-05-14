@@ -7,6 +7,7 @@ import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
+import SudoModal from '@/components/sudo-modal';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -57,6 +58,8 @@ export default function AdminUsersPage() {
   // Delete modal
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showSudoModal, setShowSudoModal] = useState(false);
+  const [sudoRetryAction, setSudoRetryAction] = useState<'create' | 'edit' | 'delete' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -99,8 +102,13 @@ export default function AdminUsersPage() {
         setCreateEmail(''); setCreateName(''); setCreatePassword(''); setCreateRole('VIEWER');
         await fetchData();
       } else {
-        const data = await res.json();
-        setCreateError(data.error ?? '생성에 실패했습니다.');
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('create');
+          setShowSudoModal(true);
+        } else {
+          setCreateError(data.error ?? '생성에 실패했습니다.');
+        }
       }
     } finally {
       setCreateLoading(false);
@@ -111,7 +119,12 @@ export default function AdminUsersPage() {
     if (!editModal.admin || editReason.length < 5) return;
     setEditLoading(true);
     try {
-      const body: any = { reason: editReason };
+      const body: {
+        reason: string;
+        role?: string;
+        status?: string;
+        dailyCreditLimit?: number;
+      } = { reason: editReason };
       if (editRole) body.role = editRole;
       if (editStatus) body.status = editStatus;
       if (editCreditLimit) body.dailyCreditLimit = parseFloat(editCreditLimit);
@@ -124,6 +137,14 @@ export default function AdminUsersPage() {
       if (res.ok) {
         setEditModal({ open: false, admin: null });
         await fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('edit');
+          setShowSudoModal(true);
+        } else {
+          alert(data.error || '수정에 실패했습니다.');
+        }
       }
     } finally {
       setEditLoading(false);
@@ -137,6 +158,14 @@ export default function AdminUsersPage() {
       if (res.ok) {
         setDeleteModal({ open: false, id: '', name: '' });
         await fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 && data.requireSudo) {
+          setSudoRetryAction('delete');
+          setShowSudoModal(true);
+        } else {
+          alert(data.error || '삭제에 실패했습니다.');
+        }
       }
     } finally {
       setDeleteLoading(false);
@@ -300,6 +329,24 @@ export default function AdminUsersPage() {
         confirmText="삭제"
         danger
         loading={deleteLoading}
+      />
+      <SudoModal
+        isOpen={showSudoModal}
+        onClose={() => {
+          setShowSudoModal(false);
+          setSudoRetryAction(null);
+        }}
+        onSuccess={async () => {
+          setShowSudoModal(false);
+          if (sudoRetryAction === 'create') {
+            await handleCreate();
+          } else if (sudoRetryAction === 'edit') {
+            await handleEdit();
+          } else if (sudoRetryAction === 'delete') {
+            await handleDelete();
+          }
+          setSudoRetryAction(null);
+        }}
       />
     </div>
   );

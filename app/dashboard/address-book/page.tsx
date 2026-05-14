@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Send, BookUser } from 'lucide-react';
 
@@ -18,15 +18,30 @@ export default function AddressBookListPage() {
   const [creating, setCreating] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchBooks = () => {
+  const fetchBooks = useCallback(() => {
     setFetchError(null);
     fetch('/api/address-book')
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => { if (data?.addressBooks) setBooks(data.addressBooks); })
       .catch(() => { setFetchError('주소록을 불러오는 중 오류가 발생했습니다.'); });
-  };
+  }, []);
 
-  useEffect(() => { fetchBooks(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/address-book')
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => {
+        if (!cancelled && data?.addressBooks) setBooks(data.addressBooks);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchError('주소록을 불러오는 중 오류가 발생했습니다.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

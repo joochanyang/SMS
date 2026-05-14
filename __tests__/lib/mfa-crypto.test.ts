@@ -98,23 +98,19 @@ describe('MFA 암호화 모듈 (AES-256-GCM)', () => {
     });
   });
 
-  describe('암호화 키 미설정 시 하위호환', () => {
-    it('MFA_ENCRYPTION_KEY 없으면 평문 그대로 반환한다', async () => {
+  describe('암호화 키 미설정 시 fail-closed', () => {
+    it('MFA_ENCRYPTION_KEY 없으면 암호화가 실패한다', async () => {
       await loadModule(); // 키 없음
 
       const secret = 'PLAIN_TEXT_SECRET';
-      const result = encryptMfaSecret(secret);
-
-      expect(result).toBe(secret);
+      expect(() => encryptMfaSecret(secret)).toThrow('MFA_ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
     });
 
-    it('MFA_ENCRYPTION_KEY 없으면 복호화도 평문 그대로 반환한다', async () => {
+    it('MFA_ENCRYPTION_KEY 없으면 복호화가 실패한다', async () => {
       await loadModule();
 
       const plainSecret = 'JBSWY3DPEHPK3PXP';
-      const result = decryptMfaSecret(plainSecret);
-
-      expect(result).toBe(plainSecret);
+      expect(() => decryptMfaSecret(plainSecret)).toThrow('MFA_ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
     });
   });
 
