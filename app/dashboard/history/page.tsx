@@ -40,8 +40,6 @@ export default async function HistoryPage() {
       messageBody: true,
       status: true,
       cost: true,
-      providerStatus: true,
-      networkName: true,
       retryCount: true,
       createdAt: true,
     },
@@ -61,7 +59,6 @@ export default async function HistoryPage() {
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>수신번호</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>메시지</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)', width: '120px' }}>상태</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>통신사/네트워크</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)', textAlign: 'center' }}>재시도</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>발송시간</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)', textAlign: 'right' }}>비용</th>
@@ -95,7 +92,6 @@ export default async function HistoryPage() {
                     {statusLabel[log.status] || log.status}
                   </div>
                 </td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.networkName || log.providerStatus || '-'}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)', textAlign: 'center' }}>{log.retryCount}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(log.createdAt)}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${Number(log.cost).toFixed(2)}</td>

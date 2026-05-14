@@ -1,6 +1,16 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> 마지막 업데이트: 2026-04-27 13:15 (TXG SMPP 3.4 전면 전환 — HTTP /sendsms·/getreport·webhook DLR·폴링 cron 폐기, 단일 워커 컨테이너로 통합)
+> 마지막 업데이트: 2026-05-14 14:50 KST — **HLR Lookup 통합 (발송 후 통신사 정확도 보강) — 코드 100% 완성, 계정 활성화 대기**.
+> - 설계 스펙: `docs/superpowers/specs/2026-05-14-hlr-lookup-design.md` (커밋 `ad08b97`)
+> - 신규: `lib/sms-providers/infobip-hlr.ts` — Infobip Number Lookup 클라이언트 (`lookupNumbers`/`isHlrEnabled`/`HlrAccountInactiveError`), 방어적 파싱. 20건 단위 테스트.
+> - 신규: `app/api/cron/hlr-enrich/route.ts` — 발송 후 HLR 보강 cron. 7일 윈도우 SENT/DELIVERED 행 → 고유번호 → 30일 캐시 조회 → MISS만 HLR 조회(하드캡 `HLR_MAX_LOOKUPS_PER_RUN` 500) → `HlrLookup` upsert → SmsLog networkName/networkCode 정확값 덮어쓰기 + hlrCheckedAt. `INFOBIP_HLR_ENABLED!=='true'`면 no-op.
+> - 신규 DB: `HlrLookup` 모델(번호별 30일 캐시) + `SmsLog.hlrCheckedAt`. 마이그레이션 `20260514000000_hlr_lookup_cache` **공유 DB 적용 완료** + `_prisma_migrations` 이력 기록.
+> - UI: 유저 페이지 통신사 컬럼 **완전 제거** (관리자 전용화). 관리자 캠페인 상세에 `통신사(라우팅)` + `통신사(HLR)` + `번호이동` 컬럼 + `admin/app/api/campaigns/[id]/route.ts` HlrLookup 조인.
+> - 🚨 핵심 제약: Infobip 계정에서 Number Lookup 서비스 **비활성** (`REJECTED_*` 응답). 코드는 완성됐고, 계정 매니저에 활성화 요청 → `INFOBIP_HLR_ENABLED=true` 토글 → cron 등록(`POST /api/cron/hlr-enrich`, 권장 10분) 하면 즉시 동작.
+> - 검증: dev 런타임에서 401/skipped/accountInactive 3경로 실검증. accountInactive 시 hlrCheckedAt NULL 유지(재조회 보존)·캐시 미생성 확인. 전체 테스트 166/166 통과.
+> - 이전(2026-05-14 05:25): **Infobip 통신사 처리 버그 수정 + reconcile cron 잡 신설** — `lib/sms-providers/mccmnc.ts`(MCCMNC→통신사명 매핑+14테스트), `app/api/infobip/dlr/route.ts` mccMnc 필드 경로 수정, `app/api/cron/infobip-reconcile/route.ts`(DLR 누락 보험, `/sms/1/logs` 보강). 4/27 6건은 logs 보존기간 초과로 `status=SENT` 유지. 운영 cron 등록 필요: `POST /api/cron/infobip-reconcile` 1분 주기.
+> 이전 업데이트: 2026-05-13 00:36 — **활성 프로바이더를 `txg` → `infobip` 메인으로 전환** (DB `SystemSetting.active_sms_provider = {"provider":"infobip"}`). 로컬·Hetzner 양쪽 공유 DB라 즉시 반영. SMPP 워커는 폴링만 하고 발송하지 않음(컨테이너는 그대로 유지). TXG로 되돌리려면 같은 키를 `{"provider":"txg"}`로 복구.
+> 이전 업데이트: 2026-04-27 13:15 (TXG SMPP 3.4 전면 전환 — HTTP /sendsms·/getreport·webhook DLR·폴링 cron 폐기, 단일 워커 컨테이너로 통합)
 > 프로젝트: `/Users/mr.joo/Desktop/sms문자사이트`
 > 감사 근거: `.planning/SECURITY-PLAN.md` 전 항목을 실제 코드와 대조
 

@@ -36,6 +36,9 @@ interface LogEntry {
   providerStatus: string | null;
   providerError: string | null;
   networkName: string | null;
+  // HLR Lookup 보강 필드 — HlrLookup 조인 전까지 null/false로 들어옴
+  hlrCarrier: string | null;
+  hlrPorted: boolean;
   retryCount: number;
   createdAt: string;
 }
@@ -124,7 +127,9 @@ export default function CampaignDetailPage() {
         </span>
       ),
     },
-    { key: 'networkName', label: '통신사', render: (row) => row.networkName ?? '-' },
+    { key: 'networkName', label: '통신사(라우팅)', render: (row) => row.networkName ?? '-' },
+    { key: 'hlrCarrier', label: '통신사(HLR)', render: (row) => row.hlrCarrier ?? '-' },
+    { key: 'hlrPorted', label: '번호이동', render: (row) => (row.hlrPorted ? 'O' : '-') },
     { key: 'cost', label: '비용', render: (row) => `\u20A9${row.cost.toLocaleString('ko-KR')}` },
     { key: 'retryCount', label: '재시도' },
     { key: 'providerError', label: '오류', render: (row) => row.providerError ?? '-' },

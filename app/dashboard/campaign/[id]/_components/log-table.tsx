@@ -8,7 +8,6 @@ type LogEntry = {
   targetNumber: string;
   status: string;
   providerStatus: string | null;
-  networkName: string | null;
   retryCount: number;
   cost: number;
   createdAt: string;
@@ -236,7 +235,6 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
               )}
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>수신번호</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>상태</th>
-              <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>통신사</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>재시도 횟수</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, border: '1px solid var(--border-strong)' }}>발송시간</th>
               <th style={{ padding: '0.6rem 0.75rem', fontWeight: 700, textAlign: 'right', border: '1px solid var(--border-strong)' }}>비용</th>
@@ -266,7 +264,6 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
                     {logStatusLabel[log.status] || log.status}
                   </div>
                 </td>
-                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.networkName || log.providerStatus || '-'}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{log.retryCount}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}>{formatDateTime(log.createdAt)}</td>
                 <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', border: '1px solid var(--border-strong)', color: 'var(--text-main)' }}>${log.cost.toFixed(2)}</td>
@@ -274,7 +271,7 @@ export default function LogTable({ logs, summary, campaignId }: Props) {
             ))}
             {filteredLogs.length === 0 && (
               <tr>
-                <td colSpan={summary.failed > 0 ? 7 : 6} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <td colSpan={summary.failed > 0 ? 6 : 5} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   {activeFilter === 'ALL' ? '발송 로그가 없습니다.' : `${filters.find(f => f.key === activeFilter)?.label} 상태의 로그가 없습니다.`}
                 </td>
               </tr>

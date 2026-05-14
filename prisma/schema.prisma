@@ -79,11 +79,12 @@ model SmsLog {
   providerName   String?   // 발송 시 사용된 프로바이더명 (infobip, smsto, txg 등) — 전달률 집계에 사용
   providerStatus String?
   providerError  String?
-  networkName    String?   // 통신사명 (Infobip DLR에서 추출)
+  networkName    String?   // 통신사명 (Infobip DLR에서 추출 → HLR 보강 시 정확값으로 덮어씀)
   networkCode    String?   // MCC+MNC 코드 (예: "450 05" = SKT)
+  hlrCheckedAt   DateTime? // HLR Lookup 보강 완료 시각 — 값이 있으면 재조회 대상에서 제외 (중복 과금 방지)
   retryCount     Int       @default(0)
   nextRetryAt    DateTime?
-  pollRetryCount Int       @default(0) // TXG DLR 폴링 시도 횟수 (≥12회 무응답 시 DELIVERY_UNKNOWN 처리)
+  pollRetryCount Int       @default(0) // 레거시 TXG HTTP 폴링 카운터 (SMPP 전환 후 신규 경로에서는 사용하지 않음)
   createdAt     DateTime  @default(now())
 
   @@index([userId, createdAt])
@@ -92,6 +93,23 @@ model SmsLog {
   @@index([status, nextRetryAt])
   @@index([userId, status])
   @@index([providerName, status, createdAt]) // 프로바이더별 전달률 집계 + TXG 폴링 대상 조회
+}
+
+// HLR Lookup 캐시 — 발송 후 Infobip Number Lookup으로 조회한 실제 가입 통신사 정보를 번호별로 저장.
+// 30일 TTL 캐시 (lookedUpAt 기준)로 동일 번호 재발송 시 재조회 비용 0.
+model HlrLookup {
+  id           String   @id @default(cuid())
+  phone        String   @unique          // E.164 정규화 번호 (캐시 키)
+  mccMnc       String?                   // HLR이 보고한 실제 통신사 MCCMNC
+  carrierName  String?                   // mccMnc → 매핑한 통신사명 (SKT/KT/LG U+)
+  countryCode  String?                   // ISO 3166-1 alpha-2 국가 코드
+  ported       Boolean  @default(false)  // 번호이동(MNP) 여부
+  reachable    String?                   // 도달 가능 상태: ACTIVE / ABSENT / DEAD / UNKNOWN
+  rawResponse  Json?                     // Infobip 원응답 (감사/디버깅용)
+  lookedUpAt   DateTime @default(now())  // 30일 TTL 판정 기준 시각
+  updatedAt    DateTime @updatedAt
+
+  @@index([lookedUpAt])
 }
 
 model Transaction {

@@ -90,7 +90,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       targetNumber: true,
       status: true,
       providerStatus: true,
-      networkName: true,
       retryCount: true,
       cost: true,
       createdAt: true,

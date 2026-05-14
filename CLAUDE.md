@@ -120,7 +120,8 @@ sms문자사이트/
 │       ├── router.ts          # 활성 프로바이더 결정
 │       ├── txg.ts             # SMPP 전용 — sendBatch는 fail-closed throw, getBalance만 HTTP 잔존
 │       ├── infobip.ts
-│       └── smsto.ts
+│       ├── smsto.ts
+│       └── mccmnc.ts          # MCCMNC → 통신사명 매핑 (DLR/reconcile에서 networkName 도출)
 ├── prisma/schema.prisma       # DB 스키마
 └── proxy.ts                   # Next.js 16 프록시 (인증 게이트)
 ```

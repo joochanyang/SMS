@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { mccMncToCarrier } from "@/lib/sms-providers/mccmnc";
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -56,15 +57,19 @@ export async function POST(req: NextRequest) {
         (typeof item?.status === "string" && item.status) ||
         "";
 
-      // 통신사 정보 추출 (Infobip DLR network 필드)
-      const networkName: string | null =
+      // 통신사 정보 추출
+      // Infobip 표준 DLR 페이로드는 mccMnc를 result 객체 top-level(camelCase)에 둔다.
+      // 일부 변형(Number Lookup 등)에서는 network.* 하위에 있으므로 두 경로 모두 본다.
+      // networkName은 Infobip이 직접 주지 않으므로 mccMnc → 매핑 헬퍼로 도출한다.
+      const mccMnc: string | null =
+        (typeof item?.mccMnc === "string" && item.mccMnc) ||
+        (typeof item?.network?.mccMnc === "string" && item.network.mccMnc) ||
+        null;
+      const explicitNetworkName: string | null =
         (typeof item?.network?.networkName === "string" && item.network.networkName) ||
         (typeof item?.network?.name === "string" && item.network.name) ||
         null;
-      const mccMnc: string | null =
-        (typeof item?.network?.mccMnc === "string" && item.network.mccMnc) ||
-        (typeof item?.mccmnc === "string" && item.mccmnc) ||
-        null;
+      const networkName: string | null = explicitNetworkName ?? mccMncToCarrier(mccMnc);
 
       const nextStatus =
         statusGroup.toUpperCase().includes("DELIVER")

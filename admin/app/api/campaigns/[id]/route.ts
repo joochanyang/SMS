@@ -56,15 +56,32 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         cost: true,
         providerStatus: true,
         providerError: true,
+        networkName: true, // 라우팅 통신사 (DLR 기반)
+        hlrCheckedAt: true, // HLR 보강 완료 시각
         retryCount: true,
         createdAt: true,
       },
     });
 
-    const maskedLogs = logs.map((log) => ({
-      ...log,
-      targetNumber: maskPhone(log.targetNumber),
-    }));
+    // HLR 캐시 조인 — HlrLookup은 phone(E.164) 키. SmsLog.targetNumber도 E.164라 직접 매칭.
+    const uniquePhones = Array.from(new Set(logs.map((l) => l.targetNumber)));
+    const hlrRows = uniquePhones.length
+      ? await prisma.hlrLookup.findMany({
+          where: { phone: { in: uniquePhones } },
+          select: { phone: true, carrierName: true, ported: true },
+        })
+      : [];
+    const hlrByPhone = new Map(hlrRows.map((h) => [h.phone, h]));
+
+    const maskedLogs = logs.map((log) => {
+      const hlr = hlrByPhone.get(log.targetNumber) ?? null;
+      return {
+        ...log,
+        targetNumber: maskPhone(log.targetNumber),
+        hlrCarrier: hlr?.carrierName ?? null, // HLR 정확 통신사
+        hlrPorted: hlr?.ported ?? false, // 번호이동(MNP) 여부
+      };
+    });
 
     // Stats summary
     const statusCounts = await prisma.smsLog.groupBy({
