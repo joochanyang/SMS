@@ -4,8 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { logger, toLogError } from "@/lib/logger";
-import { getActiveProvider, getProviderByName } from "@/lib/sms-providers/router";
-import type { SmsProviderName } from "@/lib/sms-providers/types";
+import { resolveSendingProvider } from "@/lib/sms-providers/router";
 import {
   getRetryDelayMs,
   isTemporaryProviderError,
@@ -121,12 +120,8 @@ export async function processCampaignBatch(
     };
   }
 
-  // 비-txg 라인: 이 캠페인의 라인으로 발송한다 (전역이 아님).
-  // 캠페인 라인이 유효하면 그 provider, 없으면(레거시) 전역 기본으로 폴백.
-  const provider =
-    campaignLine && campaignLine !== "txg"
-      ? getProviderByName(campaignLine as SmsProviderName)
-      : await getActiveProvider();
+  // 비-txg 라인: 이 캠페인의 라인으로 발송. 미설정/레거시/전역txg는 router가 안전 폴백.
+  const provider = await resolveSendingProvider(campaignLine);
 
   const providerMaxBatch = Math.max(1, provider.maxBatchSize);
 

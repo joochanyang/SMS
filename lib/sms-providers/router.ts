@@ -59,6 +59,29 @@ export function getProviderByName(name: SmsProviderName): SmsProvider {
 }
 
 /**
+ * 캠페인 라인 이름으로 발송 provider를 해석한다 (비-txg 직접발송 경로 전용).
+ * - 이름이 유효(infobip|smsto)하고 isConfigured()면 그 라인.
+ * - txg / null / 무효 / 미설정이면 전역 기본(getActiveProvider)으로 폴백.
+ *   단 전역 기본이 txg면 직접발송 경로에서 쓸 수 없으므로 infobip으로 강제 폴백한다.
+ */
+export async function resolveSendingProvider(campaignLine: string | null): Promise<SmsProvider> {
+  if (campaignLine && campaignLine !== "txg" && campaignLine in PROVIDERS) {
+    const candidate = PROVIDERS[campaignLine as SmsProviderName]();
+    if (candidate.isConfigured()) {
+      return candidate;
+    }
+    logger.warn(`[SmsRouter] 캠페인 라인 ${campaignLine} 미설정 — 전역/infobip 폴백합니다.`);
+  }
+
+  const fallback = await getActiveProvider();
+  // 직접발송 경로는 txg를 처리할 수 없다 — 전역이 txg면 infobip으로 강제.
+  if (fallback.name === "txg") {
+    return new InfobipProvider();
+  }
+  return fallback;
+}
+
+/**
  * 전체 프로바이더 목록과 설정 상태를 반환한다.
  */
 export function getAllProviders(): { name: SmsProviderName; provider: SmsProvider }[] {
