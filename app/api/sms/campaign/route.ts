@@ -12,6 +12,7 @@ import {
 import { generateSenderId, isValidSenderId } from "@/lib/sender-id";
 import { substituteVars } from "@/lib/variable-substitution";
 import { withRateLimit } from "@/lib/api-rate-limit";
+import { resolveUserProvider } from "@/lib/sms-providers/router";
 
 type RecipientWithVars = {
   phone: string;
@@ -113,6 +114,10 @@ export async function POST(req: NextRequest) {
       select: { costPerMessage: true },
     });
     const costPerMessage = Number(userForCost?.costPerMessage ?? SMS_POLICY.defaultCostPerMessageKrw);
+
+    // 유저별 발송 라인 결정 (미배정 시 전역 기본 infobip 폴백)
+    const userProvider = await resolveUserProvider(session.user.id);
+    const campaignProviderName = userProvider.name;
 
     if (!message) return NextResponse.json({ error: "메시지를 입력하세요." }, { status: 400 });
     if (recipients.length === 0) {
@@ -279,6 +284,7 @@ export async function POST(req: NextRequest) {
           messageBody: hasVars && varsMap.has(to) ? substituteVars(message, varsMap.get(to)!) : message,
           status: "PENDING",
           cost: costPerMessage,
+          providerName: campaignProviderName,
         })),
       });
 
