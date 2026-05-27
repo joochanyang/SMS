@@ -6,6 +6,27 @@
 > **이전 시점 이전 PR/이슈 번호**(예: 본문의 "PR #3", "PR #12")는 **옛 저장소(joocy75-hash/infosms) 기준** — 새 저장소에는 해당 번호 없음
 > git 히스토리는 전체 그대로 옮겨졌으므로 커밋 SHA는 동일
 
+> ## 🟢 2026-05-28 admin 인증 보강 (`9bd2570` main 머지, 서버 재배포 완료)
+>
+> **계기**: 사용자 "관리자페이지 로그인 반응 0" 신고 → 진단 결과 **코드는 멀쩡, 비번 자동완성이 옛 값 채우고 5회 초과로 rate limit(`IP당 15분 5회`)에 걸렸던 것**. 캐시 깨고 손으로 타이핑하니 정상 로그인 됨.
+>
+> **부수로 발견한 진짜 코드 이슈 4건 동시 fix** (PR 없이 `fix/admin-auth-hardening` → main 머지):
+> 1. `admin/proxy.ts`: CSRF Origin 검증을 `ADMIN_ALLOWED_ORIGINS` 화이트리스트 기반으로. 미설정 시 기존 Host 비교 fallback. nginx 뒤 Host/Origin 불일치 환경 대비
+> 2. `admin/lib/admin-session.ts`: IP 바인딩에 `ADMIN_SESSION_IP_BIND` 정책 도입 (`strict`/`prefix`/`off`, **기본 prefix**). IPv4 /24·IPv6 /64 prefix 매치 — 셀룰러·WiFi 전환에도 세션 유지
+> 3. `admin/app/dashboard-client.tsx`: 401일 때만 `/login` redirect. 5xx·네트워크 장애는 console.error만 — **로그인 무한 핑퐁 차단**
+> 4. auth route 4개(`login`/`setup`/`mfa-verify`/`session`) silent catch에 `console.error` 추가 — 500 발생 시 컨테이너 로그로 추적 가능
+>
+> **함정 박제**:
+> - **로그인 rate limit**: `admin/lib/rate-limit.ts:39` `LOGIN: { windowMs: 15*60*1000, maxRequests: 5 }`. **5회 초과 시 15분 차단** + 계정 자체도 LOCKED 15분(`admin/app/api/auth/login/route.ts:147`)
+> - rate limit 차단 시 응답은 `429 + "로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도하세요."` — 사용자에겐 명확한데 자동완성/캐시랑 결합되면 "반응 0"으로 느껴짐
+> - **본인이 rate limit에 걸렸을 때 풀기**: rate-limit은 메모리 → `ssh root@5.161.112.248 'cd /opt/sovereign-sms && docker compose restart sovereign-sms-admin'`. 계정 lockout이면 추가로 DB UPDATE 필요
+>
+> **NEW 환경변수 (선택, 미설정 시 안전 기본값)**:
+> - `ADMIN_ALLOWED_ORIGINS`: 쉼표분리. 예 `http://5.161.112.248:3301,https://admin.example.com`
+> - `ADMIN_SESSION_IP_BIND`: `strict` / `prefix`(기본) / `off`
+>
+> ---
+>
 > ## 🔴 다음 세션 재개 지점 (2026-05-28 저장소 이전 후)
 >
 > ### 즉시 처리 필요 (사용자 액션, 우선순위 순)
