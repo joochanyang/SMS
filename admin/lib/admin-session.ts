@@ -53,10 +53,22 @@ export function getClientUserAgent(req: NextRequest): string {
 }
 
 function cookieOptions() {
-  // 프로덕션에서는 항상 Secure=true. HTTPS 리버스 프록시(Nginx/Caddy) 필수.
+  // secure 쿠키 정책:
+  // - 기본: HTTPS(=production + HTTPS 리버스프록시) 환경에서만 secure=true
+  // - 명시적 제어: ADMIN_SECURE_COOKIE=true|false 로 강제 가능
+  //
+  // ⚠️ 함정: NODE_ENV=production이라도 HTTP로 접속하면 secure=true 쿠키는
+  // 브라우저가 거부함 → Set-Cookie 헤더는 와도 저장 안 됨 → 다음 요청에
+  // 쿠키 안 실림 → /api/auth/session 401 → /login 무한 redirect.
+  // HTTP 접속을 허용해야 하는 환경(IP+포트 직접 접속 등)은 ADMIN_SECURE_COOKIE=false.
+  const explicit = process.env.ADMIN_SECURE_COOKIE;
+  const secure =
+    explicit === 'true' ? true
+    : explicit === 'false' ? false
+    : process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure,
     sameSite: 'strict' as const,
     path: '/',
   };
