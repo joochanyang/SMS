@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldOff, Plus, Trash2 } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
 import { hasPermission } from '@/lib/rbac';
-
-interface AdminInfo { name: string; email: string; role: string }
+import { useAdminInfo } from '@/lib/use-admin-info';
 
 interface BlacklistEntry {
   id: string;
@@ -22,10 +19,9 @@ interface BlacklistEntry {
 
 export default function BlacklistPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const admin = useAdminInfo();
   const [entries, setEntries] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -50,24 +46,15 @@ export default function BlacklistPage() {
         ...(typeFilter && { type: typeFilter }),
       });
 
-      const [sessionRes, blRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/blacklist?${params}`),
-      ]);
-
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
+      const blRes = await fetch(`/api/blacklist?${params}`);
+      if (blRes.status === 401) { router.push('/login'); return; }
       if (blRes.ok) {
         const data = await blRes.json();
         setEntries(data.entries ?? []);
         setTotalPages(Math.ceil((data.total ?? 0) / 20) || 1);
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[blacklist] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -135,15 +122,8 @@ export default function BlacklistPage() {
     },
   ];
 
-  if (!admin) {
-    return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
-  }
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="블랙리스트 관리" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           <div className="filters-bar">
             <select className="filter-select" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}>
               <option value="">전체 유형</option>
@@ -172,8 +152,6 @@ export default function BlacklistPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
 
       {/* Add Modal */}
       {addModal && canManageBlacklist && (
@@ -225,6 +203,6 @@ export default function BlacklistPage() {
           <textarea className="input" rows={2} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="제거 사유..." style={{ width: '100%', resize: 'vertical' }} />
         </div>
       </ConfirmModal>
-    </div>
+    </>
   );
 }

@@ -18,8 +18,6 @@ const TpsChart = dynamic(() => import('@/components/tps-chart'), {
   loading: () => <div style={{ width: '100%', height: 280, background: 'var(--surface-hover)', borderRadius: '8px', animation: 'pulse 1.5s ease-in-out infinite' }} />,
   ssr: false,
 });
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import StatCard from '@/components/stat-card';
 
 interface ProviderStatRow {
@@ -91,19 +89,13 @@ function getDeliveryRateColor(rate: number): string {
   return 'var(--status-danger)';
 }
 
-interface AdminInfo {
-  name: string;
-  username: string;
-  role: string;
-}
 
 export default function DashboardClient() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
-  const [loading, setLoading] = useState(true);
   // 프로바이더별 전달률 윈도우 탭 상태 (최근 24시간 / 7일)
   const [providerWindow, setProviderWindow] = useState<'24h' | '7d'>('24h');
+  const killSwitchActive = stats?.systemStatus?.killSwitch ?? false;
 
   const fetchData = useCallback(async () => {
     try {
@@ -122,8 +114,8 @@ export default function DashboardClient() {
         return;
       }
 
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
+      await sessionRes.json();
+      // admin 정보는 AdminShell이 관리 — 여기선 session 검증만 함
 
       if (statsRes.ok) {
         const raw = await statsRes.json();
@@ -196,8 +188,6 @@ export default function DashboardClient() {
       // 여기서는 네트워크 장애, JSON 파싱 오류, 매핑 오류 등이 잡히므로
       // 로그인으로 무조건 돌리지 않는다 (서버 장애를 "로그인 만료"로 둔갑시키는 silent failure 방지).
       console.error('[dashboard] 통계 조회 실패', e);
-    } finally {
-      setLoading(false);
     }
   }, [router]);
 
@@ -207,33 +197,12 @@ export default function DashboardClient() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (loading || !admin) {
-    return (
-      <div className="loading-center" style={{ minHeight: '100vh' }}>
-        <span className="spinner spinner-lg" />
-      </div>
-    );
-  }
-
-  const killSwitchActive = stats?.systemStatus?.killSwitch ?? false;
-
+  // 풀스크린 spinner 제거 — AdminShell의 Sidebar/Header는 layout에서 계속 보이고,
+  // 본문은 stats가 null일 때 0/대시값으로 즉시 렌더되므로 깜빡임 없음.
   return (
-    <div className="admin-layout">
-      <Sidebar
-        adminName={admin.name}
-        adminEmail={admin.username}
-        adminRole={admin.role}
-        killSwitchActive={killSwitchActive}
-      />
-      <div className="admin-main">
-        <Header
-          title="대시보드"
-          killSwitchActive={killSwitchActive}
-          adminName={admin.name}
-        />
-        <main className="admin-content">
-          {/* Stat Cards */}
-          <div className="stat-cards-row">
+    <>
+      {/* Stat Cards */}
+      <div className="stat-cards-row">
             <StatCard
               title="오늘 발송"
               value={stats?.totalSent ?? 0}
@@ -690,8 +659,6 @@ export default function DashboardClient() {
               </div>
             )}
           </div>
-        </main>
-      </div>
-    </div>
+    </>
   );
 }

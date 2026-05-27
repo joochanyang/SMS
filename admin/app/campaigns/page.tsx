@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, MessageSquare, StopCircle } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
 import { hasPermission } from '@/lib/rbac';
+import { useAdminInfo } from '@/lib/use-admin-info';
 
 interface CampaignRow {
   id: string;
@@ -18,12 +17,6 @@ interface CampaignRow {
   failed: number;
   status: string;
   createdAt: string;
-}
-
-interface AdminInfo {
-  name: string;
-  email: string;
-  role: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -48,10 +41,9 @@ const statusClasses: Record<string, string> = {
 
 export default function CampaignsPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const admin = useAdminInfo();
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(1);
@@ -74,27 +66,15 @@ export default function CampaignsPage() {
         ...(statusFilter !== 'ALL' && { status: statusFilter }),
       });
 
-      const [sessionRes, campRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/campaigns?${params}`),
-      ]);
-
-      if (!sessionRes.ok) {
-        router.push('/login');
-        return;
-      }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
+      const campRes = await fetch(`/api/campaigns?${params}`);
+      if (campRes.status === 401) { router.push('/login'); return; }
       if (campRes.ok) {
         const data = await campRes.json();
         setCampaigns(data.campaigns ?? []);
         setTotalPages(data.totalPages ?? (Math.ceil((data.total ?? 0) / 20) || 1));
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[campaigns] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -208,25 +188,8 @@ export default function CampaignsPage() {
     },
   ];
 
-  if (!admin) {
-    return (
-      <div className="loading-center" style={{ minHeight: '100vh' }}>
-        <span className="spinner spinner-lg" />
-      </div>
-    );
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar
-        adminName={admin.name}
-        adminEmail={admin.email}
-        adminRole={admin.role}
-        killSwitchActive={killSwitch}
-      />
-      <div className="admin-main">
-        <Header title="캠페인 모니터링" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           <div className="filters-bar">
             <div className="filter-search">
               <Search size={16} className="search-icon" />
@@ -283,8 +246,6 @@ export default function CampaignsPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
 
       <ConfirmModal
         isOpen={stopModal.open}
@@ -296,6 +257,6 @@ export default function CampaignsPage() {
         danger
         loading={stopLoading}
       />
-    </div>
+    </>
   );
 }

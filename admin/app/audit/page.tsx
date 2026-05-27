@@ -3,11 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { History, ChevronDown, ChevronUp } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
-
-interface AdminInfo { name: string; email: string; role: string }
 
 interface AuditRow {
   id: string;
@@ -37,10 +33,8 @@ const actionLabels: Record<string, string> = {
 
 export default function AuditPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [logs, setLogs] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [actionFilter, setActionFilter] = useState('');
   const [targetTypeFilter, setTargetTypeFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
@@ -58,24 +52,15 @@ export default function AuditPage() {
         ...(resultFilter && { result: resultFilter }),
       });
 
-      const [sessionRes, auditRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/audit?${params}`),
-      ]);
-
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
+      const auditRes = await fetch(`/api/audit?${params}`);
+      if (auditRes.status === 401) { router.push('/login'); return; }
       if (auditRes.ok) {
         const data = await auditRes.json();
         setLogs(data.logs ?? []);
         setTotalPages(Math.ceil((data.total ?? 0) / 30) || 1);
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[audit] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -118,16 +103,8 @@ export default function AuditPage() {
     },
   ];
 
-  if (!admin) {
-    return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="감사 로그" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           <div className="filters-bar">
             <select className="filter-select" value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}>
               <option value="">전체 액션</option>
@@ -200,8 +177,6 @@ export default function AuditPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </>
   );
 }

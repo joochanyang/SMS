@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Check, X, Eye } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
 import { hasPermission } from '@/lib/rbac';
-
-interface AdminInfo { name: string; email: string; role: string }
+import { useAdminInfo } from '@/lib/use-admin-info';
 
 interface TemplateRow {
   id: string;
@@ -31,10 +28,9 @@ const statusClasses: Record<string, string> = {
 
 export default function TemplatesPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const admin = useAdminInfo();
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [statusFilter, setStatusFilter] = useState('PENDING');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -57,24 +53,15 @@ export default function TemplatesPage() {
         ...(statusFilter !== 'ALL' && { status: statusFilter }),
       });
 
-      const [sessionRes, tplRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/templates?${params}`),
-      ]);
-
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
+      const tplRes = await fetch(`/api/templates?${params}`);
+      if (tplRes.status === 401) { router.push('/login'); return; }
       if (tplRes.ok) {
         const data = await tplRes.json();
         setTemplates(data.templates ?? []);
         setTotalPages(Math.ceil((data.total ?? 0) / 20) || 1);
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[templates] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -141,16 +128,8 @@ export default function TemplatesPage() {
     },
   ];
 
-  if (!admin) {
-    return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="템플릿 검토" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           <div className="filters-bar">
             <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
               <option value="ALL">전체</option>
@@ -175,8 +154,6 @@ export default function TemplatesPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
 
       {/* Preview Modal */}
       {previewTemplate && (
@@ -224,6 +201,6 @@ export default function TemplatesPage() {
           </div>
         )}
       </ConfirmModal>
-    </div>
+    </>
   );
 }

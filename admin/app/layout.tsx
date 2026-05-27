@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
+import ConditionalShell from '@/components/conditional-shell';
 import './globals.css';
 
 const pretendard = localFont({
@@ -21,7 +22,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" className={pretendard.variable}>
-      <body>{children}</body>
+      <body>
+        <ConditionalShell>{children}</ConditionalShell>
+      </body>
     </html>
   );
 }

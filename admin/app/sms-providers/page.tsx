@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Radio, CheckCircle, XCircle, RefreshCw, Send, Zap } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import ConfirmModal from '@/components/confirm-modal';
 import SudoModal from '@/components/sudo-modal';
 import { hasPermission } from '@/lib/rbac';
-
-interface AdminInfo { name: string; email: string; role: string }
+import { useAdminInfo } from '@/lib/use-admin-info';
 
 interface ProviderInfo {
   name: string;
@@ -51,7 +48,7 @@ type SendTestResult = {
 
 export default function SmsProvidersPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const admin = useAdminInfo();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [killSwitch, setKillSwitch] = useState(false);
@@ -79,16 +76,17 @@ export default function SmsProvidersPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // killSwitch는 settings 페이지처럼 화면 표시에 필요해서 session 호출 유지
       const [sessionRes, providersRes] = await Promise.all([
         fetch('/api/auth/session'),
         fetch('/api/sms-providers'),
       ]);
 
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
+      if (sessionRes.status === 401) { router.push('/login'); return; }
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json();
+        setKillSwitch(sessionData.killSwitch ?? false);
+      }
 
       if (providersRes.ok) {
         const data = await providersRes.json();
@@ -186,17 +184,7 @@ export default function SmsProvidersPage() {
   const canSendProviderTest = admin.role === 'SUPER_ADMIN';
 
   return (
-    <div className="admin-layout">
-      <Sidebar
-        adminName={admin.name}
-        adminEmail={admin.email}
-        adminRole={admin.role}
-        killSwitchActive={killSwitch}
-      />
-      <main className="admin-main">
-        <Header title="SMS 라인 관리" killSwitchActive={killSwitch} adminName={admin.name} />
-
-        <div className="admin-content">
+    <>
         {loading ? (
           <div className="loading-container">
             <div className="spinner" />
@@ -298,8 +286,6 @@ export default function SmsProvidersPage() {
             ))}
           </div>
         )}
-        </div>
-      </main>
 
       {/* 활성 라인 변경 모달 */}
       <ConfirmModal
@@ -467,6 +453,6 @@ export default function SmsProvidersPage() {
           to { transform: rotate(360deg); }
         }
       `}</style>
-    </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -103,19 +104,16 @@ export default function Sidebar({ adminName, adminRole, killSwitchActive }: Side
         <nav className="sidebar-nav">
           <div className="sidebar-section-label">메뉴</div>
           {visibleNavItems.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
+              prefetch
               className={`sidebar-link ${isActive(item.href) ? 'active' : ''}`}
-              onClick={(e) => {
-                e.preventDefault();
-                setMobileOpen(false);
-                router.push(item.href);
-              }}
+              onClick={() => setMobileOpen(false)}
             >
               <item.icon size={20} />
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
 

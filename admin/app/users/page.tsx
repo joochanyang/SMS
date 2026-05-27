@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Users as UsersIcon } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 
 interface UserRow {
@@ -15,12 +13,6 @@ interface UserRow {
   costPerMessage: number;
   status: string;
   createdAt: string;
-}
-
-interface AdminInfo {
-  name: string;
-  email: string;
-  role: string;
 }
 
 const statusMap: Record<string, string> = {
@@ -37,7 +29,6 @@ const badgeClassMap: Record<string, string> = {
 
 export default function UsersPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -46,7 +37,6 @@ export default function UsersPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [killSwitch, setKillSwitch] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -60,27 +50,19 @@ export default function UsersPage() {
         ...(statusFilter !== 'ALL' && { status: statusFilter }),
       });
 
-      const [sessionRes, usersRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/users?${params}`),
-      ]);
+      const usersRes = await fetch(`/api/users?${params}`);
 
-      if (!sessionRes.ok) {
+      if (usersRes.status === 401) {
         router.push('/login');
         return;
       }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
       if (usersRes.ok) {
         const data = await usersRes.json();
         setUsers(data.users ?? []);
         setTotalPages(data.totalPages ?? (Math.ceil((data.total ?? 0) / 20) || 1));
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[users] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -147,25 +129,8 @@ export default function UsersPage() {
     },
   ];
 
-  if (!admin) {
-    return (
-      <div className="loading-center" style={{ minHeight: '100vh' }}>
-        <span className="spinner spinner-lg" />
-      </div>
-    );
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar
-        adminName={admin.name}
-        adminEmail={admin.email}
-        adminRole={admin.role}
-        killSwitchActive={killSwitch}
-      />
-      <div className="admin-main">
-        <Header title="사용자 관리" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           {/* Filters */}
           <div className="filters-bar">
             <div className="filter-search">
@@ -248,8 +213,6 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </>
   );
 }

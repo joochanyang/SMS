@@ -3,11 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, CreditCard } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
-
-interface AdminInfo { name: string; email: string; role: string }
 
 interface LedgerRow {
   id: string;
@@ -28,10 +24,8 @@ const typeLabels: Record<string, string> = {
 
 export default function CreditsPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [entries, setEntries] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [userId, setUserId] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [page, setPage] = useState(1);
@@ -46,24 +40,15 @@ export default function CreditsPage() {
         ...(typeFilter !== 'ALL' && { type: typeFilter }),
       });
 
-      const [sessionRes, ledgerRes] = await Promise.all([
-        fetch('/api/auth/session'),
-        fetch(`/api/credits/ledger?${params}`),
-      ]);
-
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
-
+      const ledgerRes = await fetch(`/api/credits/ledger?${params}`);
+      if (ledgerRes.status === 401) { router.push('/login'); return; }
       if (ledgerRes.ok) {
         const data = await ledgerRes.json();
         setEntries(data.entries ?? []);
         setTotalPages(Math.ceil((data.total ?? 0) / 30) || 1);
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[credits] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -87,16 +72,8 @@ export default function CreditsPage() {
     { key: 'createdAt', label: '일시', render: (row) => new Date(row.createdAt).toLocaleString('ko-KR') },
   ];
 
-  if (!admin) {
-    return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="크레딧 원장" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           <div className="filters-bar">
             <div className="filter-search">
               <Search size={16} className="search-icon" />
@@ -128,8 +105,6 @@ export default function CreditsPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </>
   );
 }

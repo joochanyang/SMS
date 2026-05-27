@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, Save, AlertTriangle } from 'lucide-react';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import ConfirmModal from '@/components/confirm-modal';
 import SudoModal from '@/components/sudo-modal';
 import { hasPermission } from '@/lib/rbac';
-
-interface AdminInfo { name: string; email: string; role: string }
+import { useAdminInfo } from '@/lib/use-admin-info';
 
 interface SettingItem {
   key: string;
@@ -21,7 +18,7 @@ interface SettingItem {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [admin, setAdmin] = useState<AdminInfo | null>(null);
+  const admin = useAdminInfo();
   const [settings, setSettings] = useState<Record<string, SettingItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [killSwitch, setKillSwitch] = useState(false);
@@ -43,23 +40,24 @@ export default function SettingsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // killSwitch 상태도 가져오기 위해 session API 호출 (settings 페이지에서 직접 토글하므로 최신값 필요)
       const [sessionRes, settingsRes] = await Promise.all([
         fetch('/api/auth/session'),
         fetch('/api/settings'),
       ]);
 
-      if (!sessionRes.ok) { router.push('/login'); return; }
-
-      const sessionData = await sessionRes.json();
-      setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
+      if (sessionRes.status === 401) { router.push('/login'); return; }
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json();
+        setKillSwitch(sessionData.killSwitch ?? false);
+      }
 
       if (settingsRes.ok) {
         const data = await settingsRes.json();
         setSettings(data.settings ?? {});
       }
-    } catch {
-      router.push('/login');
+    } catch (e) {
+      console.error('[settings] 조회 실패', e);
     } finally {
       setLoading(false);
     }
@@ -136,16 +134,8 @@ export default function SettingsPage() {
   const canUpdateSettings = admin ? hasPermission(admin.role, 'setting:update') : false;
   const canToggleKillSwitch = admin ? hasPermission(admin.role, 'killswitch:toggle') : false;
 
-  if (!admin) {
-    return <div className="loading-center" style={{ minHeight: '100vh' }}><span className="spinner spinner-lg" /></div>;
-  }
-
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="시스템 설정" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
+    <>
           {/* Kill Switch */}
           <div className="card" style={{ marginBottom: '24px', borderColor: killSwitch ? 'var(--status-danger)' : undefined }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -209,8 +199,6 @@ export default function SettingsPage() {
               </div>
             ))
           )}
-        </main>
-      </div>
 
       {/* Edit Setting Modal */}
       {editModal && (
@@ -270,6 +258,6 @@ export default function SettingsPage() {
           setSudoRetryAction(null);
         }}
       />
-    </div>
+    </>
   );
 }
