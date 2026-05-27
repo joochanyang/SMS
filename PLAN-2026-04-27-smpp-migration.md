@@ -14,7 +14,7 @@
 worktree:  /Users/mr.joo/Desktop/sms문자사이트/.claude/worktrees/kind-hertz-6b2fde
 브랜치:    claude/kind-hertz-6b2fde (main과 동일 SHA, 변경사항 모두 unstaged)
 main SHA:  8dbfcb9 (2026-04-25 기준)
-remote:    https://github.com/joocy75-hash/infosms.git
+remote:    https://github.com/joochanyang/SMS.git (2026-05-28 이전, 옛 저장소: joocy75-hash/infosms)
 DB:        Hetzner PostgreSQL 16 (5.161.112.248:5434/bulksms, smsuser/smspass_prod_2026)
 TXG SMPP:  8.222.226.152:20002 — system_id=0278C012, password는 worktree .env 참조
 TXG HTTP:  http://8.222.226.152:20003 (잔액 전용, 별도 password)

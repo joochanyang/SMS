@@ -1,15 +1,20 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-28 02:00 KST)
+> ## 📦 저장소 이전 (2026-05-28)
+> **새 저장소**: `joochanyang/SMS` (https://github.com/joochanyang/SMS)
+> **옛 저장소**: `joocy75-hash/infosms` — 더 이상 push 안 함, 그대로 보존
+> **이전 시점 이전 PR/이슈 번호**(예: 본문의 "PR #3", "PR #12")는 **옛 저장소(joocy75-hash/infosms) 기준** — 새 저장소에는 해당 번호 없음
+> git 히스토리는 전체 그대로 옮겨졌으므로 커밋 SHA는 동일
+
+> ## 🔴 다음 세션 재개 지점 (2026-05-28 저장소 이전 후)
 >
 > ### 즉시 처리 필요 (사용자 액션, 우선순위 순)
-> 1. **🚨 GitHub 토큰 revoke 필수** — joocy75-hash 계정의 토큰(2026-05-28 채팅 노출, prefix `ghp_9rQS...`)이 평문 노출됨. ⚠️ 전체 토큰은 의도적으로 안 적음(이 파일도 push 차단됨).
+> 1. **🚨 옛 GitHub 토큰 revoke 필수** — joocy75-hash 계정의 토큰(2026-05-28 채팅 노출, prefix `ghp_9rQS...`)이 평문 노출됨. ⚠️ 전체 토큰은 의도적으로 안 적음.
 >    - https://github.com/settings/tokens 접속(joocy75-hash로 로그인) → 해당 토큰 Revoke
->    - 새 PAT classic 생성 (scope: `repo`, `workflow`)
->    - `~/.config/gh/hosts.yml`의 `oauth_token:` 두 줄(`users.joocy75-hash:` 아래 + 최상위 alias) 모두 새 토큰으로 교체
->    - `gh auth status`로 ✓ Logged in 확인
-> 2. **서버 배포 확인** — PR #3 squash-merge(`278e6a6`)가 main에 들어가 `.github/workflows/deploy.yml`이 자동 트리거됐을 것. https://github.com/joocy75-hash/infosms/actions 에서 성공 여부 확인.
->    - 자동 배포 실패/미설정이면 수동: `ssh root@5.161.112.248 "cd /opt/sovereign-sms && git pull && docker compose up -d --build"`
+>    - (joocy75-hash 토큰은 새 저장소에 더 이상 필요 없음 — 새 저장소 push는 joochanyang 계정으로 진행됨)
+> 2. **서버 배포 origin 갱신** — 서버 `/opt/sovereign-sms`의 git remote도 새 저장소로 교체 필요:
+>    - `ssh root@5.161.112.248 "cd /opt/sovereign-sms && git remote set-url origin https://github.com/joochanyang/SMS.git && git pull && docker compose up -d --build"`
+>    - 자동 배포(`.github/workflows/deploy.yml`)의 deploy secret(서버 SSH key/path)이 새 저장소에 그대로 옮겨졌는지 확인: https://github.com/joochanyang/SMS/settings/secrets/actions
 > 3. **관리자 페이지 첫 로그인** — `admin` / `Asdf!234` → 로그인 직후 관리자 페이지 내에서 비밀번호 변경(운영 SUPER_ADMIN 계정, 위 비번은 채팅 transcript에 남음).
 >
 > ### 자주 반복할 작업 (앞으로 들어오는 엑셀 적재)
@@ -28,7 +33,7 @@
 > - 적재 후 검증 SQL: `PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms -c "SELECT name, (SELECT COUNT(*) FROM \"Contact\" c WHERE c.\"addressBookId\"=ab.id) FROM \"AddressBook\" ab WHERE ab.\"userId\"='cmntvm0q1000039aktjxrp50p' AND ab.name LIKE '<접두사>%' ORDER BY LENGTH(name), name;"`
 >
 > ### 환경 변경 요약 (이미 적용됨, 참고용)
-> - `~/.zshrc`에 `__gh_auto_switch` chpwd hook 추가 — `sms문자사이트`/`infosms` 폴더 들어가면 gh 자동으로 `joocy75-hash` 전환
+> - `~/.zshrc`에 `__gh_auto_switch` chpwd hook 추가 — `sms문자사이트`/`SMS` 폴더 들어가면 gh 자동으로 `joochanyang` 전환 (2026-05-28 저장소 이전으로 대상 계정 변경)
 > - 기존 `feature/per-user-sms-line` 브랜치는 별도 PR 대기 중(아래 옛 섹션 참조). 이번 PR과 무관, 머지 안 됨
 >
 > ### 이번 세션 산출물(머지됨)

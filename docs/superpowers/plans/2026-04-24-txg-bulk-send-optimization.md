@@ -900,7 +900,7 @@ git push origin main
 
 ```bash
 TOKEN=$(unset GITHUB_TOKEN; gh auth token)
-ssh root@5.161.112.248 "cd /opt/sovereign-sms && git fetch 'https://x-access-token:${TOKEN}@github.com/joocy75-hash/infosms.git' main && git reset --hard FETCH_HEAD && git log -1 --oneline"
+ssh root@5.161.112.248 "cd /opt/sovereign-sms && git fetch 'https://x-access-token:${TOKEN}@github.com/joochanyang/SMS.git' main && git reset --hard FETCH_HEAD && git log -1 --oneline"
 ```
 
 - [x] **Step 3: Prisma 마이그레이션 실행 (DB 스키마 반영)**
