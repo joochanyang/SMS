@@ -1,5 +1,43 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
+> ## 🔴 다음 세션 재개 지점 (2026-05-28 02:00 KST)
+>
+> ### 즉시 처리 필요 (사용자 액션, 우선순위 순)
+> 1. **🚨 GitHub 토큰 revoke 필수** — joocy75-hash 계정의 토큰(2026-05-28 채팅 노출, prefix `ghp_9rQS...`)이 평문 노출됨. ⚠️ 전체 토큰은 의도적으로 안 적음(이 파일도 push 차단됨).
+>    - https://github.com/settings/tokens 접속(joocy75-hash로 로그인) → 해당 토큰 Revoke
+>    - 새 PAT classic 생성 (scope: `repo`, `workflow`)
+>    - `~/.config/gh/hosts.yml`의 `oauth_token:` 두 줄(`users.joocy75-hash:` 아래 + 최상위 alias) 모두 새 토큰으로 교체
+>    - `gh auth status`로 ✓ Logged in 확인
+> 2. **서버 배포 확인** — PR #3 squash-merge(`278e6a6`)가 main에 들어가 `.github/workflows/deploy.yml`이 자동 트리거됐을 것. https://github.com/joocy75-hash/infosms/actions 에서 성공 여부 확인.
+>    - 자동 배포 실패/미설정이면 수동: `ssh root@5.161.112.248 "cd /opt/sovereign-sms && git pull && docker compose up -d --build"`
+> 3. **관리자 페이지 첫 로그인** — `admin` / `Asdf!234` → 로그인 직후 관리자 페이지 내에서 비밀번호 변경(운영 SUPER_ADMIN 계정, 위 비번은 채팅 transcript에 남음).
+>
+> ### 자주 반복할 작업 (앞으로 들어오는 엑셀 적재)
+> `~/Desktop/스마/<파일>.xlsx`가 새로 들어오면 — 무헤더(A=번호, B=이름) 가정:
+> ```bash
+> cd ~/Desktop/sms문자사이트
+> npx tsx scripts/import-address-book-chunks.ts \
+>   --file "/Users/mr.joo/Desktop/스마/<새파일>.xlsx" \
+>   --prefix <접두사> \
+>   --user-id cmntvm0q1000039aktjxrp50p \
+>   --dry-run
+> # 출력 OK면 --dry-run 빼고 재실행
+> ```
+> - 각 청크 맨 앞에 본인 3개(MY_CONTACTS: 01028855838/01083658229/01029155838) 자동 prepend
+> - 청크명 1000 단위 누진(`<접두사>1000, 2000, ...`). 마지막 청크 1000 미만이어도 이름 그대로
+> - 적재 후 검증 SQL: `PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms -c "SELECT name, (SELECT COUNT(*) FROM \"Contact\" c WHERE c.\"addressBookId\"=ab.id) FROM \"AddressBook\" ab WHERE ab.\"userId\"='cmntvm0q1000039aktjxrp50p' AND ab.name LIKE '<접두사>%' ORDER BY LENGTH(name), name;"`
+>
+> ### 환경 변경 요약 (이미 적용됨, 참고용)
+> - `~/.zshrc`에 `__gh_auto_switch` chpwd hook 추가 — `sms문자사이트`/`infosms` 폴더 들어가면 gh 자동으로 `joocy75-hash` 전환
+> - 기존 `feature/per-user-sms-line` 브랜치는 별도 PR 대기 중(아래 옛 섹션 참조). 이번 PR과 무관, 머지 안 됨
+>
+> ### 이번 세션 산출물(머지됨)
+> - PR #3 `278e6a6` main 머지 완료: 엑셀/CSV 업로드 파서 fix + 주소록 대량 적재 도구
+> - DB 적재: 원피.xlsx 35,899행 → 주소록 36개(`원피1000~원피36000`) 총 36,001건 admin 유저에 들어감
+> - AdminUser `admin` 비밀번호 재설정 완료 (argon2id, SUPER_ADMIN)
+>
+> ---
+>
 > 2026-05-28 추가 — **엑셀 업로드 파서 fix + 주소록 대량 적재 도구 + 원피.xlsx 36개 청크 적재 완료**.
 > - 업로드 파서: `lib/contact-import.ts`(신규 공용) — 한글/영문 헤더 자동 매핑(`번호/이름/별명`, `phone/name/nickname`, 별칭 다수). 헤더 인식 실패 시 모든 셀에서 번호 추출 폴백.
 > - sms-send 페이지(`app/dashboard/sms-send/page.tsx`): 이전엔 헤더를 무시하고 모든 셀을 번호로 쏟아부어 "유효한 수신 번호 없음" 빈발. 이제 헤더 기반 매핑 + 이름/별명 있으면 `substitutionMode` 자동 on(변수치환 바로 동작). 양식 헤더를 한글 `번호/이름/별명`, 예시도 010 형식으로 통일.
