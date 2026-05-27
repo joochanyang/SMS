@@ -112,8 +112,13 @@ export default function DashboardClient() {
         fetch('/api/dashboard/stats'),
       ]);
 
-      if (!sessionRes.ok) {
+      // 401만 로그인으로 보냄. 5xx·네트워크 장애는 catch에서 처리 — 로그인 무한 핑퐁 방지
+      if (sessionRes.status === 401) {
         router.push('/login');
+        return;
+      }
+      if (!sessionRes.ok) {
+        console.error('[dashboard] /api/auth/session 응답 비정상:', sessionRes.status);
         return;
       }
 

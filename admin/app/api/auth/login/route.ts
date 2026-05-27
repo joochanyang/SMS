@@ -214,7 +214,8 @@ export async function POST(request: NextRequest) {
     });
     setSessionCookie(response, token, expiresAt);
     return response;
-  } catch {
+  } catch (e) {
+    console.error('[admin/login] 처리 중 예외:', e);
     return NextResponse.json({ error: '로그인 처리 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

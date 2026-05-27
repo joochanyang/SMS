@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
       killSwitch: isKillSwitchActive(killSwitchLevel),
       killSwitchLevel,
     });
-  } catch {
+  } catch (e) {
+    console.error('[admin/session] 처리 중 예외:', e);
     return NextResponse.json(
       { error: '세션 확인 중 오류가 발생했습니다.' },
       { status: 500 },
