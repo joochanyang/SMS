@@ -35,8 +35,14 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
  * 관리자 패널용 사전 정의 Rate Limit 설정
  */
 export const RATE_LIMITS = {
-  /** 로그인 시도: IP당 15분에 5회 */
-  LOGIN: { windowMs: 15 * 60 * 1000, maxRequests: 5 } satisfies RateLimitConfig,
+  /**
+   * 로그인 시도 rate limit: IP당 15분에 10회.
+   *
+   * 한도 의미: "연속 실패 10회" 가 정확함. 성공하면 카운터가 리셋되도록
+   * `admin/app/api/auth/login/route.ts` 가 성공 분기에서 resetRateLimit() 호출.
+   * 따라서 정상 사용자는 사실상 영향 없고, brute-force만 차단.
+   */
+  LOGIN: { windowMs: 15 * 60 * 1000, maxRequests: 10 } satisfies RateLimitConfig,
 
   /** 일반 API 호출: IP당 분당 60회 */
   API: { windowMs: 60 * 1000, maxRequests: 60 } satisfies RateLimitConfig,

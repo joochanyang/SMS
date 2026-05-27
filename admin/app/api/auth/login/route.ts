@@ -8,7 +8,7 @@ import {
   getClientIp,
   getClientUserAgent,
 } from '@/lib/admin-session';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, resetRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Success — reset failed count, update lastLoginAt
+    // 8. Success — reset failed count, update lastLoginAt, clear rate-limit window
     await prisma.adminUser.update({
       where: { id: currentAdmin.id },
       data: {
@@ -175,6 +175,9 @@ export async function POST(request: NextRequest) {
         lastLoginAt: new Date(),
       },
     });
+    // 성공 시 IP rate-limit 카운터 리셋. 정상 사용자가 짧은 시간에 여러 번 로그인해도(자동완성 옛값
+    // 시도 후 본인이 다시 정상 로그인 등) 429에 걸리지 않도록 — rate limit은 "연속 실패 보호"용
+    resetRateLimit(`login:${ip}`);
 
     // 9. MFA check
     if (currentAdmin.mfaEnabled) {
