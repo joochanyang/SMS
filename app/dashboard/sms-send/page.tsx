@@ -14,6 +14,10 @@ import {
   type CampaignProgress,
   type RecipientWithVars,
 } from './sms-send-utils';
+import {
+  extractContactsLoose,
+  type ContactImportRow,
+} from '@/lib/contact-import';
 
 export default function SmsSendPage() {
   const searchParams = useSearchParams();
@@ -124,23 +128,38 @@ export default function SmsSendPage() {
   const isOverBalance = validRecipients.length > availableSendCount && validRecipients.length > 0;
   const isOverLimit = smsInfo.charCount > smsInfo.maxChars;
 
+  const applyImportedRows = (rows: ContactImportRow[], filename: string) => {
+    const contacts = extractContactsLoose(rows);
+    if (contacts.length === 0) {
+      setStatusError('파일에서 번호를 찾지 못했습니다. 헤더(번호/이름/별명)를 확인하세요.');
+      return;
+    }
+
+    setRecipients(contacts.map((c) => c.phone).join('\n'));
+    setCsvFilename(filename);
+
+    const hasVars = contacts.some((c) => c.name || c.nickname);
+    if (hasVars) {
+      setRecipientsWithVars(
+        contacts.map((c) => ({
+          phone: cleanPhoneInput(c.phone),
+          name: c.name,
+          nickname: c.nickname,
+        })),
+      );
+      setSubstitutionMode(true);
+    } else {
+      setRecipientsWithVars([]);
+    }
+  };
+
   const parseCsvFile = (file: File) => {
     setStatusError(null);
     Papa.parse(file, {
+      header: true,
       skipEmptyLines: true,
       complete: (result) => {
-        const values: string[] = [];
-        for (const row of result.data as Array<string[] | string>) {
-          if (Array.isArray(row)) {
-            for (const cell of row) {
-              if (typeof cell === 'string' && cell.trim()) values.push(cell.trim());
-            }
-          } else if (typeof row === 'string' && row.trim()) {
-            values.push(row.trim());
-          }
-        }
-        setRecipients(values.join('\n'));
-        setCsvFilename(file.name);
+        applyImportedRows(result.data as ContactImportRow[], file.name);
       },
       error: () => setStatusError('CSV 파싱 실패. 파일 형식을 확인하세요.'),
     });
@@ -154,17 +173,15 @@ export default function SmsSendPage() {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, blankrows: false, raw: false });
-        const values: string[] = [];
-        for (const row of rows) {
-          if (!Array.isArray(row)) continue;
-          for (const cell of row) {
-            const s = typeof cell === 'string' ? cell.trim() : cell != null ? String(cell).trim() : '';
-            if (s) values.push(s);
-          }
+        if (!sheet) {
+          setStatusError('엑셀 시트를 찾을 수 없습니다.');
+          return;
         }
-        setRecipients(values.join('\n'));
-        setCsvFilename(file.name);
+        const rows = XLSX.utils.sheet_to_json<ContactImportRow>(sheet, {
+          defval: '',
+          raw: false,
+        });
+        applyImportedRows(rows, file.name);
       } catch {
         setStatusError('엑셀 파싱 실패. 파일 형식을 확인하세요.');
       }
@@ -541,9 +558,9 @@ export default function SmsSendPage() {
               </label>
               <button onClick={() => {
                 const ws = XLSX.utils.aoa_to_sheet([
-                  ['phone', 'name', 'nickname'],
-                  ['+821012345678', '홍길동', '길동이'],
-                  ['+821098765432', '김철수', '철수'],
+                  ['번호', '이름', '별명'],
+                  ['010-1234-5678', '홍길동', '길동이'],
+                  ['01098765432', '김철수', '철수'],
                 ]);
                 ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }];
                 const wb = XLSX.utils.book_new();

@@ -1,6 +1,40 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> 마지막 업데이트: 2026-05-14 14:50 KST — **HLR Lookup 통합 (발송 후 통신사 정확도 보강) — 코드 100% 완성, 계정 활성화 대기**.
+> 2026-05-28 추가 — **엑셀 업로드 파서 fix + 주소록 대량 적재 도구 + 원피.xlsx 36개 청크 적재 완료**.
+> - 업로드 파서: `lib/contact-import.ts`(신규 공용) — 한글/영문 헤더 자동 매핑(`번호/이름/별명`, `phone/name/nickname`, 별칭 다수). 헤더 인식 실패 시 모든 셀에서 번호 추출 폴백.
+> - sms-send 페이지(`app/dashboard/sms-send/page.tsx`): 이전엔 헤더를 무시하고 모든 셀을 번호로 쏟아부어 "유효한 수신 번호 없음" 빈발. 이제 헤더 기반 매핑 + 이름/별명 있으면 `substitutionMode` 자동 on(변수치환 바로 동작). 양식 헤더를 한글 `번호/이름/별명`, 예시도 010 형식으로 통일.
+> - 주소록 페이지(`app/dashboard/address-book/[id]/page.tsx`): 양식 컬럼 순서를 sms-send와 맞춤. `import-contacts.ts`는 lib re-export로 축소.
+> - 테스트: `__tests__/lib/contact-import.test.ts` 12 케이스 신규. 전체 vitest 194/194 통과.
+>
+> ### 📌 주소록 대량 적재 절차 (앞으로 추가될 파일 같은 방식)
+> 도구: `scripts/import-address-book-chunks.ts` (CLI). 무헤더 엑셀(A열=번호, B열=이름) 가정. 각 청크 맨 앞에 본인 3개 자동 prepend(MY_CONTACTS: 김무석/박진우/김만구).
+>
+> **사용 패턴**:
+> ```bash
+> # 1) dry-run으로 청크 수·이름·건수 미리보기 (DB 변경 없음)
+> npx tsx scripts/import-address-book-chunks.ts \
+>   --file "/Users/mr.joo/Desktop/스마/<파일>.xlsx" \
+>   --prefix <접두사> \
+>   --user-id cmntvm0q1000039aktjxrp50p \
+>   --dry-run
+>
+> # 2) OK면 --dry-run 빼고 실적재
+> npx tsx scripts/import-address-book-chunks.ts \
+>   --file "/Users/mr.joo/Desktop/스마/<파일>.xlsx" \
+>   --prefix <접두사> \
+>   --user-id cmntvm0q1000039aktjxrp50p
+> ```
+> - `--chunk-size 1000` 기본 (옵션). 청크 이름은 `<접두사>1000, <접두사>2000, ...` 1000 단위 누진.
+> - 마지막 청크가 1000 미만이어도 이름은 그대로 누진(예: 35,893행→`<접두사>36000`이 마지막, 893+3=896건).
+> - 적재 대상 유저: `admin` (`cmntvm0q1000039aktjxrp50p`). 다른 유저 쓰려면 `--user-id` 변경.
+> - 본인 번호 3개를 바꾸려면 스크립트 상단 `MY_CONTACTS` 배열 수정.
+> - ⚠️ 원본 엑셀에 헤더 행이 **없어야** A=번호 B=이름 매핑이 맞음. 헤더 있는 파일은 첫 행이 데이터에서 빠지거나 깨질 수 있음 → dry-run 결과 "유효 행" 수치로 검증.
+>
+> **2026-05-28 실적**: 원피.xlsx(35,899행) → 유효 35,893 → 주소록 36개(원피1000~원피36000) 총 36,001건 admin 유저에 적재 완료.
+>
+> ---
+>
+> 이전 업데이트: 2026-05-14 14:50 KST — **HLR Lookup 통합 (발송 후 통신사 정확도 보강) — 코드 100% 완성, 계정 활성화 대기**.
 > - 설계 스펙: `docs/superpowers/specs/2026-05-14-hlr-lookup-design.md` (커밋 `ad08b97`)
 > - 신규: `lib/sms-providers/infobip-hlr.ts` — Infobip Number Lookup 클라이언트 (`lookupNumbers`/`isHlrEnabled`/`HlrAccountInactiveError`), 방어적 파싱. 20건 단위 테스트.
 > - 신규: `app/api/cron/hlr-enrich/route.ts` — 발송 후 HLR 보강 cron. 7일 윈도우 SENT/DELIVERED 행 → 고유번호 → 30일 캐시 조회 → MISS만 HLR 조회(하드캡 `HLR_MAX_LOOKUPS_PER_RUN` 500) → `HlrLookup` upsert → SmsLog networkName/networkCode 정확값 덮어쓰기 + hlrCheckedAt. `INFOBIP_HLR_ENABLED!=='true'`면 no-op.

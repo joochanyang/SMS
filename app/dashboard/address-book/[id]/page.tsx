@@ -174,11 +174,11 @@ export default function AddressBookDetailPage() {
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['이름', '별명', '번호'],
-      ['홍길동', '길동이', '+821012345678'],
-      ['김철수', '철수', '+821098765432'],
+      ['번호', '이름', '별명'],
+      ['010-1234-5678', '홍길동', '길동이'],
+      ['01098765432', '김철수', '철수'],
     ]);
-    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 18 }];
+    ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '주소록');
     XLSX.writeFile(wb, '주소록_양식.xlsx');
