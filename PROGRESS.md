@@ -6,9 +6,33 @@
 > **이전 시점 이전 PR/이슈 번호**(예: 본문의 "PR #3", "PR #12")는 **옛 저장소(joocy75-hash/infosms) 기준** — 새 저장소에는 해당 번호 없음
 > git 히스토리는 전체 그대로 옮겨졌으므로 커밋 SHA는 동일
 
-> ## 🟢 2026-05-28 admin 인증 보강 (`9bd2570` main 머지, 서버 재배포 완료)
+> ## 🟢 2026-05-28 admin 로그인 무한 redirect 영구 fix (`6b5e8a1` main 머지)
 >
-> **계기**: 사용자 "관리자페이지 로그인 반응 0" 신고 → 진단 결과 **코드는 멀쩡, 비번 자동완성이 옛 값 채우고 5회 초과로 rate limit(`IP당 15분 5회`)에 걸렸던 것**. 캐시 깨고 손으로 타이핑하니 정상 로그인 됨.
+> ### 🔥 진짜 진짜 원인 (chrome-devtools MCP로 라이브 재현 후 확정)
+> **`NODE_ENV=production` 환경에서 `secure=true` 쿠키를 HTTP 접속(`http://5.161.112.248:3301`)에서 발급 → 브라우저가 거부 → 다음 요청에 `admin_session` 쿠키 안 실림 → proxy.ts가 401/redirect → `/login` 무한 핑퐁**.
+>
+> 재현 시퀀스 (Chrome MCP `evaluate_script`):
+> 1. `POST /api/auth/login` → 200 success
+> 2. `document.cookie === ""` (쿠키 거부됨, Set-Cookie 무효)
+> 3. `GET /api/auth/session` → 401
+> 4. `GET /` → 307 → `/login?redirect=/`
+>
+> ### Fix (`6b5e8a1`)
+> - `admin/lib/admin-session.ts` `cookieOptions()`: `ADMIN_SECURE_COOKIE=true|false` 명시 제어. 미설정 시 NODE_ENV 기반 (HTTPS 환경 안전)
+> - 서버 `/opt/sovereign-sms/.env`: 옛 `FORCE_SECURE_COOKIE=false` (코드에서 더 이상 안 읽음) → `ADMIN_SECURE_COOKIE=false` 로 정정
+> - 라이브 검증: chrome-devtools로 admin/Asdf!234 로그인 → 대시보드 정상 진입, /api/auth/session=200 ✅
+>
+> ### 부수로 발견·fix한 진짜 코드 이슈 5건 (한꺼번에 같은 세션, `9bd2570`·`082e744`·`6b5e8a1`)
+> 1. `admin/proxy.ts`: CSRF Origin 검증을 `ADMIN_ALLOWED_ORIGINS` 화이트리스트 기반으로. 미설정 시 기존 Host 비교 fallback
+> 2. `admin/lib/admin-session.ts`: IP 바인딩에 `ADMIN_SESSION_IP_BIND` 정책 도입 (`strict`/`prefix`/`off`, **기본 prefix**). IPv4 /24·IPv6 /64 prefix 매치
+> 3. `admin/app/dashboard-client.tsx`: 401일 때만 `/login` redirect. 5xx·네트워크 장애는 console.error만 — 무한 핑퐁 차단
+> 4. auth route 4개(`login`/`setup`/`mfa-verify`/`session`) silent catch에 `console.error`
+> 5. **rate-limit 카운터 성공 시 리셋** (`admin/app/api/auth/login/route.ts`): 성공·실패 무관 카운트 버그 fix. 한도도 5→10
+>
+> ### 앞 진단 정정 (잘못 짚었던 것)
+> - "비번 자동완성·rate-limit이 원인이다" → 부분적 사실(rate-limit 버그는 진짜 있었음)이나 **진짜 원인은 secure 쿠키**
+> - "코드는 멀쩡" → **틀림**. 쿠키 정책·rate-limit 리셋 두 군데 다 버그였음
+> - chrome MCP로 직접 제어 안 했으면 영원히 못 잡았을 가능성
 >
 > **부수로 발견한 진짜 코드 이슈 4건 동시 fix** (PR 없이 `fix/admin-auth-hardening` → main 머지):
 > 1. `admin/proxy.ts`: CSRF Origin 검증을 `ADMIN_ALLOWED_ORIGINS` 화이트리스트 기반으로. 미설정 시 기존 Host 비교 fallback. nginx 뒤 Host/Origin 불일치 환경 대비
