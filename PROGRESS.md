@@ -6,6 +6,28 @@
 > **이전 시점 이전 PR/이슈 번호**(예: 본문의 "PR #3", "PR #12")는 **옛 저장소(joocy75-hash/infosms) 기준** — 새 저장소에는 해당 번호 없음
 > git 히스토리는 전체 그대로 옮겨졌으므로 커밋 SHA는 동일
 
+> ## 🟢 2026-05-28 admin 페이지 전환 깜빡임 제거 (`0d81615` main 머지, 서버 재배포 완료)
+>
+> **목표**: "반응속도 빠르고 로딩 느낌 안 받기"
+>
+> **원인 3가지**:
+> 1. 모든 페이지가 자기 자신이 Sidebar/Header 렌더 → 전환마다 DOM 재마운트
+> 2. 각 페이지 `if (!admin) return <풀스크린 spinner>` → 본문 통째로 가렸다가 다시 그림
+> 3. Sidebar 링크가 `<a href> + e.preventDefault() + router.push()` → prefetch 0
+>
+> **Fix**:
+> - `admin/components/admin-shell.tsx` (신규): Sidebar+Header를 layout 레벨에서 한 번만 마운트. admin 세션 정보는 sessionStorage 캐시(즉시 표시) + 30초 백그라운드 refresh
+> - `admin/components/conditional-shell.tsx` (신규): `/login`·`/mfa-*` 는 AdminShell 안 끼움
+> - `admin/app/layout.tsx`: `<ConditionalShell>` 으로 children 감쌈
+> - `admin/components/sidebar.tsx`: `<a href>` → `<Link prefetch>` (soft navigation + 자동 prefetch)
+> - `admin/lib/use-admin-info.ts` (신규): 페이지가 RBAC 판단용으로 admin role을 sessionStorage에서 즉시 읽는 훅
+> - `admin/app/loading.tsx`: 풀스크린 spinner → 본문 영역 인라인 skeleton
+> - 8개 페이지(dashboard/users/campaigns/credits/blacklist/templates/audit/settings/sms-providers): Sidebar/Header 중복 렌더 제거 + `if (!admin)` 분기 제거 + `<div admin-layout>` 외곽 제거 → `<></>` fragment
+>
+> **chrome MCP 라이브 검증**: 대시보드 진입 직후 8개 페이지 RSC가 백그라운드로 prefetch됨. 사이드바 메뉴 클릭 시 Sidebar/Header DOM uid 그대로 유지 + Header title만 자동 갱신 + 본문만 교체. 깜빡임 사실상 0
+>
+> ---
+>
 > ## 🟢 2026-05-28 admin 로그인 무한 redirect 영구 fix (`6b5e8a1` main 머지)
 >
 > ### 🔥 진짜 진짜 원인 (chrome-devtools MCP로 라이브 재현 후 확정)
