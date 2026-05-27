@@ -185,7 +185,8 @@ export async function POST(request: NextRequest) {
         warning: `백업 코드가 사용되었습니다. 남은 코드: ${admin.mfaBackupCodes.length - 1}개`,
       }),
     });
-  } catch {
+  } catch (e) {
+    console.error('[admin/mfa-verify] 처리 중 예외:', e);
     return NextResponse.json({ error: 'MFA 인증 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

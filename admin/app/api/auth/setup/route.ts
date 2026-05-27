@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
         role: admin.role,
       },
     });
-  } catch {
+  } catch (e) {
+    console.error('[admin/setup] 처리 중 예외:', e);
     return NextResponse.json(
       { error: '초기 설정 중 오류가 발생했습니다.' },
       { status: 500 },

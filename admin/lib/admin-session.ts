@@ -6,6 +6,37 @@ const SESSION_COOKIE = 'admin_session';
 const SESSION_IDLE_MS = 30 * 60 * 1000;        // 30 minutes
 const SESSION_ABSOLUTE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+// 세션 IP 바인딩 정책 (ADMIN_SESSION_IP_BIND):
+// - "strict": 정확히 같은 IP만 허용 (보안 강함, UX 불편)
+// - "prefix"(기본): IPv4 /24, IPv6 /64 같은 prefix면 허용 (셀룰러·WiFi 전환 대응)
+// - "off": IP 검증 끔 (테스트·신뢰 네트워크 전용)
+type IpBindMode = 'strict' | 'prefix' | 'off';
+function getIpBindMode(): IpBindMode {
+  const v = (process.env.ADMIN_SESSION_IP_BIND ?? 'prefix').toLowerCase();
+  if (v === 'strict' || v === 'off' || v === 'prefix') return v;
+  return 'prefix';
+}
+
+function ipsMatch(sessionIp: string, currentIp: string, mode: IpBindMode): boolean {
+  if (mode === 'off') return true;
+  if (sessionIp === currentIp) return true;
+  if (mode === 'strict') return false;
+  // prefix mode
+  if (sessionIp.includes(':') && currentIp.includes(':')) {
+    // IPv6 — /64 prefix (앞 4 그룹)
+    const a = sessionIp.split(':').slice(0, 4).join(':');
+    const b = currentIp.split(':').slice(0, 4).join(':');
+    return a === b && a.length > 0;
+  }
+  if (!sessionIp.includes(':') && !currentIp.includes(':')) {
+    // IPv4 — /24 prefix (앞 3 옥텟)
+    const a = sessionIp.split('.').slice(0, 3).join('.');
+    const b = currentIp.split('.').slice(0, 3).join('.');
+    return a === b && a.split('.').length === 3;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -127,9 +158,9 @@ export async function validateSession(
     return null;
   }
 
-  // IP binding check
+  // IP binding check (정책: strict / prefix / off — ADMIN_SESSION_IP_BIND)
   const currentIp = getClientIp(req);
-  if (session.ipAddress !== currentIp) {
+  if (!ipsMatch(session.ipAddress, currentIp, getIpBindMode())) {
     await prisma.adminSession.delete({ where: { id: session.id } });
     return null;
   }
