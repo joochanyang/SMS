@@ -1,18 +1,31 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #3 + PR #4 머지·재배포·라이브 검증 모두 완료)
+> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #5 머지·서버 admin+smpp-worker 재배포 완료)
 >
 > **재개 명령어**: `/clear` 후 "sms문자사이트 다음 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터
 >
-> ### 진행 상태 (감사 계획서 P0~P2 거의 전부 정리됨)
-> - ✅ **PR #3 squash 머지**: `d16397a refactor(admin): users/[id] 페이지 모달 분해 + HTTP randomUUID 폴리필 (#3)` (2026-05-28 19:30 UTC)
-> - ✅ **PR #4 squash 머지**: `37d7007 chore: 출시 후 잡정리 배치 (P1-2 ESLint + P2-3 archive + P2-5 .bkit) (#4)` (2026-05-28 19:34 UTC)
-> - ✅ **서버 HEAD = `37d7007`**, admin 컨테이너 재빌드 → `Up (healthy)`, `Next.js 16.2.3 ✓ Ready` (2026-05-29 04:34 KST)
-> - ✅ **라이브 검증 통과** (2026-05-29):
->   - PR #3 유저 정보 수정 / 건수 지급 모달 정상 동작 + sudo + AuditLog 기록 OK
->   - PR #3 HTTP 환경 멱등성 키 폴리필 정상 (Network 탭 `Idempotency-Key` 헤더 확인)
->   - PR #4 대시보드 프로바이더 잔액 카드 30초 polling 정상, Console에 `set-state-in-effect` 경고 0건
-> - ✅ **머지된 stale 브랜치 4개 정리**: `feat/txg-bulk-send-ops`, `fix/admin-auth-hardening`, `fix/phase1-critical-issues`, `fix/txg-empty-source-addr` (로컬+원격)
+> ### 본 세션 결과
+> - ✅ **PR #5 squash 머지**: `52a649a feat: 유저별 발송 라인 라우팅 (campaign-processor + SMPP 워커 행 기준 분기) (#5)` (2026-05-29 04:53 KST)
+> - ✅ **서버 HEAD = `52a649a`**, admin + smpp-worker 둘 다 재빌드+재시작:
+>   - `sovereign-sms-admin`: `Up (healthy)` + `Next.js 16.2.3 ✓ Ready` + `/login` 200 / `/api/auth/session` 401
+>   - `sovereign-sms-smpp-worker`: `Up` + SMPP `bind_transceiver 성공` (TXG `8.222.226.152:20002` system_id `0278C012`)
+> - ✅ **옛 `feature/per-user-sms-line` 브랜치 정리 완료** (로컬+원격 삭제)
+> - ✅ **배포 시점 발송 중 행 0건** — `SELECT status, COUNT(*) FROM SmsLog WHERE status IN ('PENDING','RETRY_PENDING','CLAIMED','PROCESSING')` 결과 0 rows. 라우팅 전환에 따른 행 분류 충돌 위험 0
+>
+> ### PR #5 변경 요약 (옛 `feature/per-user-sms-line`에서 발송 경로 변경 4 커밋만 cherry-pick + main 기반 재정리)
+> - `app/api/sms/campaign/route.ts`: 캠페인 생성 시 `resolveUserProvider(userId)` → 모든 `SmsLog.providerName` 박제
+> - `lib/campaign-processor.ts`: 행 `providerName` 기준 `shouldDelegateToWorker()` 분기. txg면 워커 위임, 비-txg면 `resolveSendingProvider()` 로 그 라인 직접 발송
+> - `lib/sms-providers/router.ts`: `resolveSendingProvider()` 신규. 전역 기본이 txg면 직접발송 경로에서 infobip으로 강제 폴백 (★데드락 방지)
+> - `services/smpp-worker/poller.ts`: 전역 `isTxgActive()` 게이트 제거 → `providerName='txg'` 행만 candidates+claim. **상호 배타로 한 행을 양쪽이 집는 충돌 0**
+> - 테스트 +9건 (`resolve-user-provider.test.ts` 보강 + `campaign-provider-split.test.ts` 신규)
+> - 검증: 루트 tsc 0 / admin tsc 0 / vitest 18 파일 213 테스트 통과
+>
+> ### 라이브 검증 (선택, 다음 세션에 가능)
+> 1. 관리자 패널에서 테스트 유저 1명의 `User.smsProvider`를 `smsto`로 변경 (SUPER_ADMIN sudo)
+> 2. 그 유저로 1건 캠페인 발송 → `SmsLog.providerName='smsto'` 박제 확인 + 실제 smsto 라우팅
+> 3. 다른 유저(전역 기본=infobip)로 1건 → `providerName='infobip'`, infobip 라우팅
+> 4. 관리자 패널에서 `User.smsProvider='txg'` 로 변경 → SMPP 워커가 그 유저 행만 picks (다른 유저 행은 안 집음)
+> 5. `SmsLog` 로 `providerName` 별 발송 분포 확인
 >
 > ### 감사 계획서 (`docs/2026-05-28-prelaunch-code-audit.md`) 잔여 정리 상태
 > | 항목 | 처리 | 비고 |
@@ -24,15 +37,16 @@
 > | P1-4 (killSwitch state) | ✅ | PR #2 |
 > | P2-2 (users/[id] 분해) | ✅ **라이브** | PR #3 = 630→323줄 + 모달 2개 + uuid 폴리필 |
 > | P2-3 (옛 plan 9개 archive) | ✅ **라이브** | PR #4 |
-> | P2-4 (stale 브랜치 5개) | ✅ 부분 | 머지된 4개 삭제 / `feature/per-user-sms-line` 보류 |
+> | P2-4 (stale 브랜치 5개) | ✅ **완료** | 머지된 4개 + `feature/per-user-sms-line` 까지 전부 정리 |
 > | P2-5 (.bkit/, .env.bak* 잔여) | ✅ **라이브** | PR #4 |
 > | P2-6 (_prisma_migrations 중복 row) | ✅ **보존 결정** | 조사 결과 Row 1 = `rolled_back_at=2026-05-28 06:00:18` 박힌 prisma 표준 패턴 (롤백된 시도 흔적 보존). 감사 보고서의 "NULL row 삭제" 명령은 prisma 표준 모르고 작성한 것 — **삭제 금지** |
+> | PR #1 후속 (발송 경로 라인별 전환) | ✅ **라이브** | PR #5 = campaign-processor + SMPP 워커 행 기준 분기 |
 >
 > ### 다음에 할 수 있는 일 (출시 차단 요소 0, 전부 선택)
-> 1. **`feature/per-user-sms-line` 브랜치 정리** (별도 결정 필요): 본 PR(=#1)이 라인 오버라이드의 최소 핵심만 흡수해서 옛 브랜치는 더 이상 머지 대상이 아님. 실제 발송 경로 라인별 전환(`campaign-processor`, SMPP 워커 라인별 claim, `SmsLog.providerName` 박제)은 별도 새 브랜치로 재작성 권장. 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line`
-> 2. **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 현재 옵셔널이라 한도 검사 생략됨. CLAUDE.md "관리자 일일 지급 한도" 정책 활성이라면 연결 필요 (typescript-pro 검증 시 의심 항목으로 박제)
+> 1. **PR #5 라이브 검증** — 위 "라이브 검증" 5단계. 실 유저 발송 테스트 또는 테스트 유저로 검증
+> 2. **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 현재 옵셔널이라 한도 검사 생략됨. CLAUDE.md "관리자 일일 지급 한도" 정책 활성이라면 연결 필요
 > 3. **(옵션) ADMIN 권한 게이트 회귀 테스트** — 일반 ADMIN 계정 1개 생성 후 비번 재설정 시도 → 403 (SUPER_ADMIN 게이트 검증). 미생성이면 스킵
-> 4. **(옵션) PR #1 후속**: 발송 경로 라인별 전환 / 비번 재설정 시 유저 이메일·SMS 통보 / NextAuth 활성 세션 강제 종료(invalidate) / 다른 admin 페이지의 `alert()` → `toast` 일괄 교체 / `recharts` npm uninstall
+> 4. **(옵션) 잔여**: 비번 재설정 시 유저 이메일·SMS 통보 / NextAuth 활성 세션 강제 종료(invalidate) / 다른 admin 페이지의 `alert()` → `toast` 일괄 교체 / `recharts` npm uninstall
 >
 > ---
 >
