@@ -215,14 +215,14 @@ POST /api/users/[id]/password
    - `confirmPassword === newPassword`
    - `reason: z.string().min(10)`
 5. `bcryptjs.hash(newPassword, 12)` — 유저(NextAuth)는 bcryptjs 사용 (admin은 argon2id, 다름. 절대 혼동 금지)
-6. `prisma.user.update({ where: { id }, data: { passwordHash, passwordChangedAt: new Date() }})`
+6. `prisma.user.update({ where: { id }, data: { passwordHash }})` (참고: `User` 모델에는 `passwordChangedAt` 컬럼이 없다 — 그건 `AdminUser` 전용. 유저 reset 시점 기록은 AuditLog로 충분)
 7. `logAdminAction(admin, 'user.password_reset', 'User', userId, reason, req, { result: 'SUCCESS' })` — **metadata에 비밀번호 평문/해시 절대 금지**. previousValue/newValue 도 비움.
 8. 200 응답 `{ ok: true }`
 
 Idempotency는 두지 않는다 (YAGNI). 이유:
 - sudo 게이트(5분 만료) + confirm modal + 클라이언트 측 loading 상태 가드로 더블 클릭 방지 충분
 - 비밀번호 재설정은 저빈도 액션
-- 동일 비번을 두 번 hash해도 결과는 동일 결과(`passwordChangedAt`만 두 번 bump — 무해)
+- 동일 비번을 두 번 hash해도 결과는 동일 결과(부수효과 없음 — User.passwordHash만 같은 값으로 재기록)
 - AuditLog는 두 줄 남지만 감사 측면에선 오히려 추적성 ↑
 
 권한 RBAC:
@@ -271,7 +271,7 @@ Idempotency는 두지 않는다 (YAGNI). 이유:
   - 영문/숫자 빠짐 400
   - 짧은 사유 400
   - 동일 idempotencyKey 재호출 시 1회만 hash + 1회만 audit
-  - 성공 시 passwordChangedAt 갱신 + audit 기록
+  - 성공 시 User.passwordHash 교체 + audit 1행 기록
 
 #### 4.7.2 컴포넌트 테스트 (가벼움)
 - `provider-balance-grid.test.tsx`
@@ -291,7 +291,7 @@ Idempotency는 두지 않는다 (YAGNI). 이유:
 
 - 본 PR은 단일 PR로 merge. 환경변수 토글 없음.
 - 롤백 시: PR revert + admin 컨테이너 재배포만으로 복구. DB 마이그레이션 없음.
-- (스키마 변경: 없음. `passwordChangedAt`는 이미 schema에 존재함.)
+- (스키마 변경: User.smsProvider 컬럼 1개 추가. 본 PR 의 Task 1.5 에서 처리. 비번 리셋은 schema 변경 없음.)
 
 ## 5. 비-목표(Out of Scope)
 

@@ -1228,7 +1228,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     await prisma.user.update({
       where: { id },
-      data: { passwordHash, passwordChangedAt: new Date() },
+      data: { passwordHash }, // User 모델에는 passwordChangedAt 컬럼 없음 — 그건 AdminUser 전용 (2026-05-28 plan fix)
     });
 
     await logAdminAction(
@@ -1967,12 +1967,12 @@ chrome-devtools MCP `navigate_page` → `http://localhost:3001/login` → `admin
 
 보안 카드에 8자+영+숫 비번 입력 → 확인 비번 일치 → 사유 10자+ → 클릭 → window.confirm 승인 → sudo 모달(필요 시) → 성공 toast.
 
-DB 확인 (별도 터미널):
+DB 확인 (별도 터미널) — User 에는 passwordChangedAt 컬럼이 없으므로 passwordHash 변경 사실은 AuditLog 로만 확인:
 ```bash
-PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms -c "SELECT id, \"passwordChangedAt\" FROM \"User\" WHERE id='<userId>';"
+PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms -c "SELECT id, LEFT(\"passwordHash\", 7) FROM \"User\" WHERE id='<userId>';"
 ```
 
-Expected: `passwordChangedAt` 가 방금 시각으로 갱신됨.
+Expected: passwordHash prefix 가 `\$2a\$12` 또는 `\$2b\$12` (bcryptjs cost 12). 이전 값과 다름.
 
 - [ ] **Step 6: AuditLog 검증**
 
@@ -2073,7 +2073,7 @@ gh pr create --title "feat(admin): dashboard provider balance + user detail 4-ca
 - [ ] vitest 전체 통과 (신규 14건 + 기존 baseline)
 - [ ] 로컬 dev 대시보드에서 잔액 카드 표시, 탭 hidden 시 fetch 정지 확인
 - [ ] 유저 상세 4개 카드 표시, 라우팅 카드 드롭다운 + breadcrumb 동작
-- [ ] 비밀번호 재설정 → DB `passwordChangedAt` 갱신 + AuditLog 1행 (action=`user.password_reset`)
+- [ ] 비밀번호 재설정 → User.passwordHash 새 값 + AuditLog 1행 (action=`user.password_reset`). User 모델에는 passwordChangedAt 컬럼이 없으므로 시점은 audit timestamp 로 확인.
 - [ ] sudo 만료 상태에서 라인 변경/비번 재설정 시 sudo 모달 prompt
 
 ## 전제
