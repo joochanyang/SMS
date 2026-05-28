@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
 
     const entries = getAllProviders();
     const now = new Date();
+    // 미설정 프로바이더는 외부 HTTP 호출 자체를 건너뛴다 (mapper 의 '미설정' 분기로 처리).
     const results = await Promise.allSettled(
-      entries.map((e) => e.provider.getBalance()),
+      entries.map((e) => (e.provider.isConfigured() ? e.provider.getBalance() : Promise.resolve(null))),
     );
 
     const balances: BalanceRow[] = entries.map((entry, idx) => {

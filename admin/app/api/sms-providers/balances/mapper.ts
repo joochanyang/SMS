@@ -1,6 +1,7 @@
-import type { SmsProviderBalance } from '@shared/sms-providers/types';
+import type { SmsProviderBalance, SmsProviderName } from '@shared/sms-providers/types';
 
-export type ProviderName = 'infobip' | 'smsto' | 'txg';
+// 진실의 원천: lib/sms-providers/types.ts — 라인이 추가되면 한 곳만 갱신하면 된다.
+export type ProviderName = SmsProviderName;
 
 const LABELS: Record<ProviderName, string> = {
   infobip: 'Infobip',
@@ -48,6 +49,8 @@ export function mapProviderToBalanceRow(input: MapperInput): BalanceRow {
     return { ...base, balance: null, currency: null, error: '미설정' };
   }
   if (input.result.status === 'rejected') {
+    // 현 시점 모든 프로바이더(infobip/smsto/txg)는 throw 하지 않고 null 반환하므로 이 분기는 미래 대비 방어 코드.
+    // 향후 throw 하는 프로바이더 추가 시 reason.message 에 API 키/토큰/URL 노출되지 않도록 호출부에서 scrub 필수.
     return { ...base, balance: null, currency: null, error: reasonMessage(input.result.reason) };
   }
   if (input.result.value === null) {
