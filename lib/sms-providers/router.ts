@@ -67,3 +67,53 @@ export function getAllProviders(): { name: SmsProviderName; provider: SmsProvide
     provider: PROVIDERS[name](),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// 유저별 발송 라인 토대 (스키마 + resolver). 본 PR 에서는 발송 경로에서 호출하지 않는다 —
+// 관리자 UI 표시 + 향후 발송 경로 전환용 토대. RoutingCard 등에서 활용.
+// ---------------------------------------------------------------------------
+
+const KNOWN_PROVIDERS = ['infobip', 'smsto', 'txg'] as const;
+export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
+
+/**
+ * 유저 설정 / 전역 설정 둘 다 고려해 발송 라인 이름을 결정하는 순수 함수.
+ * - user override 가 알려진 라인이면 그 라인.
+ * - 아니면 global 이 알려진 라인이면 global.
+ * - 그것도 아니면 'infobip' 기본값.
+ */
+export function pickProviderName(
+  userSetting: string | null | undefined,
+  globalSetting: string,
+): KnownProvider {
+  if (userSetting && (KNOWN_PROVIDERS as readonly string[]).includes(userSetting)) {
+    return userSetting as KnownProvider;
+  }
+  if ((KNOWN_PROVIDERS as readonly string[]).includes(globalSetting)) {
+    return globalSetting as KnownProvider;
+  }
+  return 'infobip';
+}
+
+/**
+ * 유저별 발송 라인 SmsProvider 인스턴스를 반환한다.
+ * - User.smsProvider 가 유효한 라인이고 isConfigured()=true 면 그 라인.
+ * - null/unknown 이거나 isConfigured()=false 이면 전역 활성 라인으로 폴백.
+ * - 본 PR 에서는 발송 경로에서 호출하지 않는다 (관리자 UI 표시 + 향후 발송 경로 전환용 토대).
+ */
+export async function resolveUserProvider(userId: string): Promise<SmsProvider> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { smsProvider: true },
+  });
+
+  const userRaw = user?.smsProvider ?? null;
+  if (userRaw && (KNOWN_PROVIDERS as readonly string[]).includes(userRaw)) {
+    const candidate = PROVIDERS[userRaw as KnownProvider]();
+    if (candidate.isConfigured()) {
+      return candidate;
+    }
+    logger.warn(`[SmsRouter] 유저 ${userId} 의 라인 ${userRaw} 가 미설정 — 전역 활성 라인으로 폴백`);
+  }
+  return getActiveProvider();
+}

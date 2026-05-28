@@ -1,0 +1,91 @@
+'use client';
+
+import { CreditCard, Plus, Minus, Edit3 } from 'lucide-react';
+
+interface Props {
+  credits: number;
+  costPerMessage: number;
+  dailySendLimit: number;
+  maxCampaignSize: number;
+  canAdjustCredits: boolean;
+  canEditCost: boolean;
+  onTopUp: () => void;
+  onDeduct: () => void;
+  onEditCost: () => void;
+}
+
+export default function AdminUserBillingCard({
+  credits,
+  costPerMessage,
+  dailySendLimit,
+  maxCampaignSize,
+  canAdjustCredits,
+  canEditCost,
+  onTopUp,
+  onDeduct,
+  onEditCost,
+}: Props) {
+  return (
+    <div className="card" style={{ marginBottom: '16px' }}>
+      <div className="card-header">
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <CreditCard size={18} /> 빌링 / 잔액
+        </h3>
+      </div>
+      <div className="card-body">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: '14px',
+            marginBottom: '14px',
+          }}
+        >
+          <div>
+            <span className="label">크레딧</span>
+            <p style={{ fontWeight: 700, fontSize: '20px' }}>
+              {'₩'}
+              {credits.toLocaleString('ko-KR')}
+            </p>
+          </div>
+          <div>
+            <span className="label">건당 단가</span>
+            <p style={{ fontWeight: 700, fontSize: '20px', color: 'var(--status-info)' }}>
+              {'₩'}
+              {Number(costPerMessage).toLocaleString('ko-KR')}
+              {canEditCost && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={onEditCost}
+                  style={{ marginLeft: '6px' }}
+                  aria-label="단가 수정"
+                >
+                  <Edit3 size={12} />
+                </button>
+              )}
+            </p>
+          </div>
+          <div>
+            <span className="label">일일 발송 한도</span>
+            <p>{dailySendLimit.toLocaleString('ko-KR')}건</p>
+          </div>
+          <div>
+            <span className="label">최대 캠페인 크기</span>
+            <p>{maxCampaignSize.toLocaleString('ko-KR')}건</p>
+          </div>
+        </div>
+
+        {canAdjustCredits && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-primary btn-sm" onClick={onTopUp}>
+              <Plus size={14} /> 충전
+            </button>
+            <button className="btn btn-outline-danger btn-sm" onClick={onDeduct}>
+              <Minus size={14} /> 차감
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -19,6 +19,7 @@ model User {
   costPerMessage  Decimal   @default(14) @db.Decimal(12, 4)
   dailySendLimit  Int       @default(10000)
   maxCampaignSize    Int       @default(5000)
+  smsProvider        String?   // 유저 배정 발송 라인 (infobip|smsto|txg). null = 전역 기본 폴백
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
   createdAt          DateTime  @default(now())

@@ -12,13 +12,8 @@ import {
   Power,
   AlertTriangle,
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
-
-const TpsChart = dynamic(() => import('@/components/tps-chart'), {
-  loading: () => <div style={{ width: '100%', height: 280, background: 'var(--surface-hover)', borderRadius: '8px', animation: 'pulse 1.5s ease-in-out infinite' }} />,
-  ssr: false,
-});
 import StatCard from '@/components/stat-card';
+import ProviderBalanceGrid from '@/components/provider-balance-grid';
 
 interface ProviderStatRow {
   provider: string;
@@ -50,7 +45,6 @@ interface DashboardStats {
   failedChange: number;
   totalCost: number;
   totalCostChange: number;
-  tpsData: { time: string; tps: number }[];
   activeCampaigns: {
     id: string;
     userName: string;
@@ -133,7 +127,6 @@ export default function DashboardClient() {
           failedChange: parseFloat(raw.comparison?.failedChange ?? raw.failedChange ?? '0'),
           totalCost: raw.today?.totalCost ?? raw.totalCost ?? 0,
           totalCostChange: parseFloat(raw.comparison?.costChange ?? raw.totalCostChange ?? '0'),
-          tpsData: raw.tpsData ?? [],
           activeCampaigns: Array.isArray(raw.activeCampaigns) ? raw.activeCampaigns : [],
           systemStatus: {
             infobip: raw.system?.infobip ?? raw.systemStatus?.infobip ?? 'unknown',
@@ -171,7 +164,6 @@ export default function DashboardClient() {
           failedChange: 0,
           totalCost: 0,
           totalCostChange: 0,
-          tpsData: [],
           activeCampaigns: [],
           systemStatus: { infobip: 'unknown', database: 'unknown', killSwitch: false },
           recentAlerts: [],
@@ -233,13 +225,9 @@ export default function DashboardClient() {
             />
           </div>
 
-          {/* TPS Chart */}
-          <div className="chart-card">
-            <h3 className="chart-card-title">발송 TPS (최근 1시간)</h3>
-            <div style={{ width: '100%', height: 280 }}>
-              <TpsChart data={stats?.tpsData ?? []} />
-            </div>
-          </div>
+          {/* 프로바이더 잔액 카드 */}
+          <ProviderBalanceGrid />
+
 
           {/* Active Campaigns */}
           <div className="card" style={{ marginBottom: '24px' }}>
