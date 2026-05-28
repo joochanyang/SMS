@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import {
-  ArrowLeft, User as UserIcon, CreditCard, MessageSquare,
-  Ban, ShieldOff, ShieldCheck, Plus, Minus,
-} from 'lucide-react';
+import { ArrowLeft, CreditCard, MessageSquare } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Sidebar from '@/components/sidebar';
 import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
 import SudoModal from '@/components/sudo-modal';
+import AdminUserProfileCard from '@/components/admin-user-profile-card';
+import AdminUserRoutingCard from '@/components/admin-user-routing-card';
+import AdminUserBillingCard from '@/components/admin-user-billing-card';
+import AdminUserSecurityCard from '@/components/admin-user-security-card';
 import { hasPermission } from '@/lib/rbac';
 
 interface AdminInfo { name: string; email: string; role: string }
@@ -21,6 +23,7 @@ interface UserDetail {
   name: string;
   credits: number;
   costPerMessage: number;
+  smsProvider: string | null;
   status: string;
   dailySendLimit: number;
   maxCampaignSize: number;
@@ -50,8 +53,6 @@ interface CampaignEntry {
   createdAt: string;
 }
 
-const statusMap: Record<string, string> = { ACTIVE: '활성', SUSPENDED: '정지', BANNED: '차단' };
-const badgeClassMap: Record<string, string> = { ACTIVE: 'badge-active', SUSPENDED: 'badge-suspended', BANNED: 'badge-banned' };
 const ledgerTypeMap: Record<string, string> = {
   ADMIN_ADD: '관리자 충전', ADMIN_DEDUCT: '관리자 차감', CORRECTION: '보정',
   BONUS: '보너스', REFUND: '환불', SMS_COST: 'SMS 비용', DEPOSIT: '입금',
@@ -68,6 +69,7 @@ export default function UserDetailPage() {
   const [campaigns, setCampaigns] = useState<CampaignEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [killSwitch, setKillSwitch] = useState(false);
+  const [globalActiveProvider, setGlobalActiveProvider] = useState<string>('infobip');
 
   // Modals
   const [suspendModal, setSuspendModal] = useState<{ open: boolean; action: string }>({ open: false, action: '' });
@@ -92,12 +94,16 @@ export default function UserDetailPage() {
   const [editReason, setEditReason] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
+  const [routingSaving, setRoutingSaving] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sessionRes, userRes] = await Promise.all([
+      const [sessionRes, userRes, provRes] = await Promise.all([
         fetch('/api/auth/session'),
         fetch(`/api/users/${userId}`),
+        fetch('/api/sms-providers'),
       ]);
 
       if (!sessionRes.ok) { router.push('/login'); return; }
@@ -111,6 +117,13 @@ export default function UserDetailPage() {
         setUser(data.user);
         setLedger(data.recentLedger ?? []);
         setCampaigns(data.recentCampaigns ?? []);
+      }
+
+      if (provRes.ok) {
+        const pd = await provRes.json();
+        if (typeof pd.activeProvider === 'string') {
+          setGlobalActiveProvider(pd.activeProvider);
+        }
       }
     } catch {
       router.push('/login');
@@ -165,6 +178,7 @@ export default function UserDetailPage() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
+        toast.success(creditType === 'ADMIN_ADD' ? '크레딧을 충전했습니다.' : '크레딧을 차감했습니다.');
         setCreditModal(false);
         setCreditAmount('');
         setCreditReason('');
@@ -176,7 +190,7 @@ export default function UserDetailPage() {
           setSudoRetryAction('credit');
           setShowSudoModal(true);
         } else {
-          alert(data.error || '처리에 실패했습니다.');
+          toast.error(data.error || '처리에 실패했습니다.');
         }
       }
     } finally {
@@ -212,6 +226,7 @@ export default function UserDetailPage() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
+        toast.success('사용자 정보를 수정했습니다.');
         setEditModal(false);
         await fetchData();
       } else {
@@ -220,11 +235,61 @@ export default function UserDetailPage() {
           setSudoRetryAction('edit');
           setShowSudoModal(true);
         } else {
-          alert(data.error || '수정에 실패했습니다.');
+          toast.error(data.error || '수정에 실패했습니다.');
         }
       }
     } finally {
       setEditLoading(false);
+    }
+  }
+
+  async function handleSmsProviderChange(next: string | null, reason: string) {
+    setRoutingSaving(true);
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smsProvider: next, reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success('발송 라인을 변경했습니다.');
+        await fetchData();
+      } else if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction(null);
+        setShowSudoModal(true);
+        toast.error('재인증 후 다시 시도하세요.');
+      } else {
+        toast.error(data.error || '변경에 실패했습니다.');
+      }
+    } finally {
+      setRoutingSaving(false);
+    }
+  }
+
+  async function handlePasswordReset(newPassword: string, confirmPassword: string, reason: string) {
+    if (!window.confirm('정말로 이 유저의 비밀번호를 재설정합니까? 유저는 다음 로그인 시 새 비밀번호를 사용해야 합니다.')) {
+      return;
+    }
+    setPwSaving(true);
+    try {
+      const res = await fetch(`/api/users/${userId}/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword, confirmPassword, reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success('비밀번호를 재설정했습니다.');
+      } else if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction(null);
+        setShowSudoModal(true);
+        toast.error('재인증 후 다시 시도하세요.');
+      } else {
+        toast.error(data.error || '재설정에 실패했습니다.');
+      }
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -237,13 +302,13 @@ export default function UserDetailPage() {
       key: 'amount', label: '금액',
       render: (row) => (
         <span style={{ color: row.amount >= 0 ? 'var(--status-success)' : 'var(--status-danger)', fontWeight: 600 }}>
-          {row.amount >= 0 ? '+' : ''}{'\u20A9'}{row.amount.toLocaleString('ko-KR')}
+          {row.amount >= 0 ? '+' : ''}{'₩'}{row.amount.toLocaleString('ko-KR')}
         </span>
       ),
     },
     {
       key: 'balanceAfter', label: '잔액',
-      render: (row) => <span>{'\u20A9'}{row.balanceAfter.toLocaleString('ko-KR')}</span>,
+      render: (row) => <span>{'₩'}{row.balanceAfter.toLocaleString('ko-KR')}</span>,
     },
     { key: 'description', label: '설명' },
     {
@@ -264,7 +329,7 @@ export default function UserDetailPage() {
     },
     {
       key: 'estimatedCost', label: '비용',
-      render: (row) => `\u20A9${row.estimatedCost.toLocaleString('ko-KR')}`,
+      render: (row) => `₩${row.estimatedCost.toLocaleString('ko-KR')}`,
     },
     {
       key: 'createdAt', label: '생성일',
@@ -298,80 +363,63 @@ export default function UserDetailPage() {
 
           {user ? (
             <>
-              {/* User profile card */}
-              <div className="card" style={{ marginBottom: '24px' }}>
-                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <UserIcon size={18} /> 사용자 정보
-                  </h3>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-outline btn-sm" onClick={() => {
-                      setEditName(user.name ?? '');
-                      setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
-                      setEditDailyLimit(String(user.dailySendLimit));
-                      setEditMaxCampaign(String(user.maxCampaignSize));
-                      setEditReason('');
-                      setEditModal(true);
-                    }} disabled={!canUpdateUser}>
-                      수정
-                    </button>
-                    {canSuspendUser && user.status === 'ACTIVE' && (
-                      <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'SUSPEND' })}>
-                        <Ban size={14} /> 정지
-                      </button>
-                    )}
-                    {canSuspendUser && user.status === 'SUSPENDED' && (
-                      <button className="btn btn-outline btn-sm" onClick={() => setSuspendModal({ open: true, action: 'UNSUSPEND' })}>
-                        <ShieldCheck size={14} /> 해제
-                      </button>
-                    )}
-                    {canSuspendUser && user.status !== 'BANNED' && (
-                      <button className="btn btn-outline-danger btn-sm" onClick={() => setSuspendModal({ open: true, action: 'BAN' })}>
-                        <ShieldOff size={14} /> 차단
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="card-body">
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
-                    <div><span className="label">이메일</span><p>{user.email}</p></div>
-                    <div><span className="label">이름</span><p>{user.name ?? '-'}</p></div>
-                    <div>
-                      <span className="label">상태</span>
-                      <p><span className={`badge ${badgeClassMap[user.status] ?? 'badge-muted'}`}><span className="badge-dot" />{statusMap[user.status] ?? user.status}</span></p>
-                    </div>
-                    <div>
-                      <span className="label">크레딧</span>
-                      <p style={{ fontWeight: 700, fontSize: '18px' }}>{'\u20A9'}{user.credits.toLocaleString('ko-KR')}</p>
-                    </div>
-                    <div>
-                      <span className="label">건당 단가</span>
-                      <p style={{ fontWeight: 700, fontSize: '18px', color: 'var(--status-info)' }}>{'\u20A9'}{Number(user.costPerMessage ?? 14).toLocaleString('ko-KR')}</p>
-                    </div>
-                    <div><span className="label">일일 발송 한도</span><p>{user.dailySendLimit.toLocaleString('ko-KR')}건</p></div>
-                    <div><span className="label">최대 캠페인 크기</span><p>{user.maxCampaignSize.toLocaleString('ko-KR')}건</p></div>
-                    <div><span className="label">가입일</span><p>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</p></div>
-                    {user.suspendedAt && (
-                      <div><span className="label">정지/차단일</span><p>{new Date(user.suspendedAt).toLocaleString('ko-KR')}</p></div>
-                    )}
-                    {user.suspendReason && (
-                      <div style={{ gridColumn: 'span 2' }}><span className="label">사유</span><p>{user.suspendReason}</p></div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <AdminUserProfileCard
+                user={{
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  status: user.status,
+                  suspendedAt: user.suspendedAt,
+                  suspendReason: user.suspendReason,
+                  createdAt: user.createdAt,
+                }}
+                canSuspend={canSuspendUser}
+                canUpdate={canUpdateUser}
+                onEdit={() => {
+                  setEditName(user.name ?? '');
+                  setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
+                  setEditDailyLimit(String(user.dailySendLimit));
+                  setEditMaxCampaign(String(user.maxCampaignSize));
+                  setEditReason('');
+                  setEditModal(true);
+                }}
+                onSuspend={() => setSuspendModal({ open: true, action: 'SUSPEND' })}
+                onUnsuspend={() => setSuspendModal({ open: true, action: 'UNSUSPEND' })}
+                onBan={() => setSuspendModal({ open: true, action: 'BAN' })}
+              />
 
-              {/* Credit adjustment button */}
-              {canAdjustCredits && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}>
-                  <Plus size={14} /> 크레딧 충전
-                </button>
-                <button className="btn btn-outline-danger btn-sm" onClick={() => { setCreditType('ADMIN_DEDUCT'); setCreditModal(true); }}>
-                  <Minus size={14} /> 크레딧 차감
-                </button>
-                </div>
-              )}
+              <AdminUserRoutingCard
+                currentSmsProvider={user.smsProvider}
+                globalDefault={globalActiveProvider}
+                canChange={canChangeCostPerMessage}
+                saving={routingSaving}
+                onChange={handleSmsProviderChange}
+              />
+
+              <AdminUserBillingCard
+                credits={user.credits}
+                costPerMessage={Number(user.costPerMessage)}
+                dailySendLimit={user.dailySendLimit}
+                maxCampaignSize={user.maxCampaignSize}
+                canAdjustCredits={canAdjustCredits}
+                canEditCost={canChangeCostPerMessage}
+                onTopUp={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}
+                onDeduct={() => { setCreditType('ADMIN_DEDUCT'); setCreditModal(true); }}
+                onEditCost={() => {
+                  setEditName(user.name ?? '');
+                  setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
+                  setEditDailyLimit(String(user.dailySendLimit));
+                  setEditMaxCampaign(String(user.maxCampaignSize));
+                  setEditReason('');
+                  setEditModal(true);
+                }}
+              />
+
+              <AdminUserSecurityCard
+                canReset={admin?.role === 'SUPER_ADMIN'}
+                saving={pwSaving}
+                onSubmit={handlePasswordReset}
+              />
 
               {/* Credit history */}
               <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
