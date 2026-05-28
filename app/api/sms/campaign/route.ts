@@ -216,32 +216,13 @@ export async function POST(req: NextRequest) {
     const campaign = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, credits: true, status: true, maxCampaignSize: true, dailySendLimit: true },
+        select: { id: true, credits: true, status: true },
       });
       if (!user) throw new Error("USER_NOT_FOUND");
 
       // 유저 상태 확인
       if (user.status !== 'ACTIVE') {
         throw new Error("ACCOUNT_SUSPENDED");
-      }
-
-      // maxCampaignSize 확인
-      if (filteredRecipients.length > user.maxCampaignSize) {
-        throw new Error("MAX_CAMPAIGN_SIZE_EXCEEDED");
-      }
-
-      // dailySendLimit 확인
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todaySentCount = await tx.smsLog.count({
-        where: {
-          userId: user.id,
-          createdAt: { gte: todayStart },
-          status: { not: "CANCELLED" },
-        },
-      });
-      if (todaySentCount + filteredRecipients.length > user.dailySendLimit) {
-        throw new Error("DAILY_SEND_LIMIT_EXCEEDED");
       }
 
       // 크레딧 atomic 차감 — WHERE 조건으로 잔액 검증 (race condition 방지)

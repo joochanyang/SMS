@@ -15,19 +15,20 @@ import CreditAdjustModal, { type CreditAdjustType, type CreditAdjustUnit } from 
 import UserEditModal from '@/components/user-edit-modal';
 import { hasPermission } from '@/lib/rbac';
 import { randomUUID } from '@/lib/uuid';
+import { formatCountWithKrw } from '@/lib/credit-units';
 
 interface AdminInfo { name: string; email: string; role: string }
 
 interface UserDetail {
   id: string;
-  email: string;
+  username: string;
+  email: string | null;
+  telegramId: string | null;
   name: string;
   credits: number;
   costPerMessage: number;
   smsProvider: string | null;
   status: string;
-  dailySendLimit: number;
-  maxCampaignSize: number;
   suspendedAt: string | null;
   suspendReason: string | null;
   createdAt: string;
@@ -97,9 +98,8 @@ export default function UserDetailPage() {
   // sudo 재인증 후 자동 재시도용
   const [pendingEditPayload, setPendingEditPayload] = useState<{
     name?: string;
+    telegramId?: string | null;
     costPerMessage?: number;
-    dailySendLimit?: number;
-    maxCampaignSize?: number;
     reason: string;
   } | null>(null);
 
@@ -215,9 +215,8 @@ export default function UserDetailPage() {
 
   async function submitEdit(payload: {
     name?: string;
+    telegramId?: string | null;
     costPerMessage?: number;
-    dailySendLimit?: number;
-    maxCampaignSize?: number;
     reason: string;
   }) {
     if (!user) return;
@@ -306,16 +305,16 @@ export default function UserDetailPage() {
       render: (row) => <span className={`badge ${row.amount >= 0 ? 'badge-active' : 'badge-suspended'}`}>{ledgerTypeMap[row.type] ?? row.type}</span>,
     },
     {
-      key: 'amount', label: '금액',
+      key: 'amount', label: '변동',
       render: (row) => (
         <span style={{ color: row.amount >= 0 ? 'var(--status-success)' : 'var(--status-danger)', fontWeight: 600 }}>
-          {row.amount >= 0 ? '+' : ''}{'₩'}{row.amount.toLocaleString('ko-KR')}
+          {formatCountWithKrw(row.amount, Number(user?.costPerMessage ?? 14), { signed: true })}
         </span>
       ),
     },
     {
-      key: 'balanceAfter', label: '잔액',
-      render: (row) => <span>{'₩'}{row.balanceAfter.toLocaleString('ko-KR')}</span>,
+      key: 'balanceAfter', label: '잔여',
+      render: (row) => <span>{formatCountWithKrw(row.balanceAfter, Number(user?.costPerMessage ?? 14))}</span>,
     },
     { key: 'description', label: '설명' },
     {
@@ -336,7 +335,7 @@ export default function UserDetailPage() {
     },
     {
       key: 'estimatedCost', label: '비용',
-      render: (row) => `₩${row.estimatedCost.toLocaleString('ko-KR')}`,
+      render: (row) => formatCountWithKrw(row.estimatedCost, Number(user?.costPerMessage ?? 14)),
     },
     {
       key: 'createdAt', label: '생성일',
@@ -370,7 +369,8 @@ export default function UserDetailPage() {
               <AdminUserProfileCard
                 user={{
                   id: user.id,
-                  email: user.email,
+                  username: user.username,
+                  telegramId: user.telegramId,
                   name: user.name,
                   status: user.status,
                   suspendedAt: user.suspendedAt,
@@ -396,8 +396,6 @@ export default function UserDetailPage() {
               <AdminUserBillingCard
                 credits={user.credits}
                 costPerMessage={Number(user.costPerMessage)}
-                dailySendLimit={user.dailySendLimit}
-                maxCampaignSize={user.maxCampaignSize}
                 canAdjustCredits={canAdjustCredits}
                 canEditCost={canChangeCostPerMessage}
                 onTopUp={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}
@@ -495,12 +493,10 @@ export default function UserDetailPage() {
       {/* Edit Modal */}
       {editModal && user && (
         <UserEditModal
-          userEmail={user.email}
-          userName={user.name}
+          userLabel={user.name ?? user.username}
           initialName={user.name ?? ''}
+          initialTelegramId={user.telegramId ?? ''}
           initialCostPerMessage={Number(user.costPerMessage ?? 14)}
-          initialDailyLimit={user.dailySendLimit}
-          initialMaxCampaign={user.maxCampaignSize}
           canEditCost={canChangeCostPerMessage}
           loading={editLoading}
           onClose={() => {

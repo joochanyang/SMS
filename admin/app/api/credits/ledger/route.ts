@@ -63,23 +63,14 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           user: {
-            select: { id: true, email: true, name: true },
+            select: { id: true, username: true, name: true, costPerMessage: true },
           },
         },
       }),
       prisma.creditLedger.count({ where }),
     ]);
 
-    // Mask emails
-    const masked = entries.map((e) => ({
-      ...e,
-      user: {
-        ...e.user,
-        email: e.user.email ? e.user.email.replace(/^(.{2}).*@/, (_, p1: string) => p1 + '***@') : null,
-      },
-    }));
-
-    return NextResponse.json({ entries: masked, total, page, limit });
+    return NextResponse.json({ entries, total, page, limit });
   } catch (err) {
     return handleApiError(err, 'credits/ledger');
   }

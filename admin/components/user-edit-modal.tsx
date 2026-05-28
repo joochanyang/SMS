@@ -4,21 +4,18 @@ import { useState } from 'react';
 import { Edit3, X, Info } from 'lucide-react';
 
 interface Props {
-  userEmail: string | null;
-  userName: string | null;
+  userLabel: string;
   initialName: string;
+  initialTelegramId: string;
   initialCostPerMessage: number;
-  initialDailyLimit: number;
-  initialMaxCampaign: number;
   /** SUPER_ADMIN 만 단가 변경 가능 */
   canEditCost: boolean;
   loading: boolean;
   onClose: () => void;
   onSubmit: (payload: {
     name?: string;
+    telegramId?: string | null;
     costPerMessage?: number;
-    dailySendLimit?: number;
-    maxCampaignSize?: number;
     reason: string;
   }) => void;
 }
@@ -59,38 +56,29 @@ function fieldStyle(): React.CSSProperties {
 }
 
 export default function UserEditModal({
-  userEmail,
-  userName,
+  userLabel,
   initialName,
+  initialTelegramId,
   initialCostPerMessage,
-  initialDailyLimit,
-  initialMaxCampaign,
   canEditCost,
   loading,
   onClose,
   onSubmit,
 }: Props) {
   const [name, setName] = useState<string>(initialName ?? '');
+  const [telegramId, setTelegramId] = useState<string>(initialTelegramId ?? '');
   const [costPerMessage, setCostPerMessage] = useState<string>(String(initialCostPerMessage ?? 14));
-  const [dailyLimit, setDailyLimit] = useState<string>(String(initialDailyLimit ?? 10000));
-  const [maxCampaign, setMaxCampaign] = useState<string>(String(initialMaxCampaign ?? 5000));
   const [reason, setReason] = useState<string>('');
 
   const cpm = parseFloat(costPerMessage);
-  const dl = parseInt(dailyLimit, 10);
-  const mc = parseInt(maxCampaign, 10);
 
   const cpmValid = Number.isFinite(cpm) && cpm > 0;
-  const dlValid = Number.isFinite(dl) && dl > 0;
-  const mcValid = Number.isFinite(mc) && mc > 0;
   const reasonOk = reason.length >= 5 && reason.length <= 500;
-  const disabled = loading || !reasonOk || !cpmValid || !dlValid || !mcValid;
+  const disabled = loading || !reasonOk || !cpmValid;
 
   let disabledReason: string | null = null;
   if (!loading) {
     if (!cpmValid) disabledReason = '건당 단가는 1원 이상 숫자여야 합니다.';
-    else if (!dlValid) disabledReason = '일일 발송 한도는 1 이상 정수여야 합니다.';
-    else if (!mcValid) disabledReason = '최대 캠페인 크기는 1 이상 정수여야 합니다.';
     else if (reason.length === 0) disabledReason = '사유 5자 이상 입력해야 저장됩니다.';
     else if (reason.length < 5) disabledReason = `사유 ${5 - reason.length}자 더 입력하세요.`;
     else if (reason.length > 500) disabledReason = '사유는 500자를 넘을 수 없습니다.';
@@ -100,19 +88,18 @@ export default function UserEditModal({
     if (disabled) return;
     const payload: {
       name?: string;
+      telegramId?: string | null;
       costPerMessage?: number;
-      dailySendLimit?: number;
-      maxCampaignSize?: number;
       reason: string;
     } = { reason };
     if (name && name !== initialName) payload.name = name;
+    const tgTrimmed = telegramId.trim();
+    if (tgTrimmed !== (initialTelegramId ?? '').trim()) {
+      payload.telegramId = tgTrimmed.length > 0 ? tgTrimmed : null;
+    }
     if (canEditCost && cpmValid && cpm !== Number(initialCostPerMessage)) payload.costPerMessage = cpm;
-    if (dlValid && dl !== Number(initialDailyLimit)) payload.dailySendLimit = dl;
-    if (mcValid && mc !== Number(initialMaxCampaign)) payload.maxCampaignSize = mc;
     onSubmit(payload);
   }
-
-  const userLabel = userName ?? userEmail ?? '대상 유저';
 
   return (
     <div
@@ -222,6 +209,18 @@ export default function UserEditModal({
             />
           </Field>
 
+          <Field label="텔레그램 아이디 (선택, 비우면 해제)">
+            <input
+              type="text"
+              value={telegramId}
+              onChange={(e) => setTelegramId(e.target.value)}
+              disabled={loading}
+              autoComplete="off"
+              placeholder="예) @user 또는 user"
+              style={fieldStyle()}
+            />
+          </Field>
+
           <Field
             label={
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -276,31 +275,6 @@ export default function UserEditModal({
               </div>
             )}
           </Field>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label="일일 발송 한도 (건)">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={dailyLimit}
-                onChange={(e) => setDailyLimit(e.target.value)}
-                disabled={loading}
-                style={{ ...fieldStyle(), borderColor: dlValid ? T.borderStrong : T.warning }}
-              />
-            </Field>
-            <Field label="최대 캠페인 크기 (건)">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={maxCampaign}
-                onChange={(e) => setMaxCampaign(e.target.value)}
-                disabled={loading}
-                style={{ ...fieldStyle(), borderColor: mcValid ? T.borderStrong : T.warning }}
-              />
-            </Field>
-          </div>
 
           <Field label="사유 (5자 이상 500자 이하, 감사 로그에 영구 기록)">
             <textarea

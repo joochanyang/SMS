@@ -4,7 +4,8 @@ import { User as UserIcon, Ban, ShieldOff, ShieldCheck } from 'lucide-react';
 
 interface UserDetail {
   id: string;
-  email: string;
+  username: string;
+  telegramId: string | null;
   name: string | null;
   status: string;
   suspendedAt: string | null;
@@ -71,8 +72,14 @@ export default function AdminUserProfileCard({
       <div className="card-body">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
           <div>
-            <span className="label">이메일</span>
-            <p>{user.email}</p>
+            <span className="label">아이디</span>
+            <p>{user.username}</p>
+          </div>
+          <div>
+            <span className="label">텔레그램</span>
+            <p style={{ color: user.telegramId ? 'var(--text-main)' : 'var(--text-muted)' }}>
+              {user.telegramId ?? '—'}
+            </p>
           </div>
           <div>
             <span className="label">이름</span>

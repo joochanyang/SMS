@@ -15,10 +15,9 @@ import type { Prisma } from '@prisma/client';
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
+  telegramId: z.string().trim().min(1).nullable().optional(),
   costPerMessage: z.number().positive('건당 단가는 0보다 커야 합니다.').optional(),
   smsProvider: z.enum(['infobip', 'smsto', 'txg']).nullable().optional(),
-  dailySendLimit: z.number().int().min(0).optional(),
-  maxCampaignSize: z.number().int().min(0).optional(),
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
 });
 
@@ -38,6 +37,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         id: true,
         username: true,
         email: true,
+        telegramId: true,
         name: true,
         credits: true,
         status: true,
@@ -45,8 +45,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         suspendReason: true,
         costPerMessage: true,
         smsProvider: true,
-        dailySendLimit: true,
-        maxCampaignSize: true,
         failedLoginCount: true,
         lockedUntil: true,
         createdAt: true,
@@ -103,7 +101,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       );
     }
 
-    const { name, costPerMessage, smsProvider, dailySendLimit, maxCampaignSize, reason } = parsed.data;
+    const { name, telegramId, costPerMessage, smsProvider, reason } = parsed.data;
     if (costPerMessage !== undefined) {
       requireRole(admin, 'SUPER_ADMIN');
       await requireSudo(req, admin);
@@ -124,11 +122,26 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: '유저를 찾을 수 없습니다.' }, { status: 404 });
     }
 
+    // 텔레그램 아이디 중복 검사 (다른 유저와 충돌 시 거부)
+    if (telegramId) {
+      const conflict = await prisma.user.findFirst({
+        where: { telegramId, NOT: { id } },
+        select: { id: true },
+      });
+      if (conflict) {
+        return NextResponse.json({ error: '이미 등록된 텔레그램 아이디입니다.' }, { status: 409 });
+      }
+    }
+
     const updateData: Prisma.UserUpdateInput = {};
-    const auditNewValue: Record<string, string | number> = {};
+    const auditNewValue: Record<string, string | number | null> = {};
     if (name !== undefined) {
       updateData.name = name;
       auditNewValue.name = name;
+    }
+    if (telegramId !== undefined) {
+      updateData.telegramId = telegramId; // null 이면 해제
+      auditNewValue.telegramId = telegramId;
     }
     if (costPerMessage !== undefined) {
       updateData.costPerMessage = costPerMessage;
@@ -137,14 +150,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (smsProvider !== undefined) {
       updateData.smsProvider = smsProvider; // null 이면 전역 기본으로 복귀
       auditNewValue.smsProvider = smsProvider ?? '전역 기본';
-    }
-    if (dailySendLimit !== undefined) {
-      updateData.dailySendLimit = dailySendLimit;
-      auditNewValue.dailySendLimit = dailySendLimit;
-    }
-    if (maxCampaignSize !== undefined) {
-      updateData.maxCampaignSize = maxCampaignSize;
-      auditNewValue.maxCampaignSize = maxCampaignSize;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -156,14 +161,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       data: updateData,
       select: {
         id: true,
+        username: true,
         email: true,
+        telegramId: true,
         name: true,
         credits: true,
         costPerMessage: true,
         smsProvider: true,
         status: true,
-        dailySendLimit: true,
-        maxCampaignSize: true,
         updatedAt: true,
       },
     });
@@ -171,10 +176,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     await logAdminAction(admin, 'USER_UPDATE', 'User', id, reason ?? '유저 정보 수정', req, {
       previousValue: {
         name: current.name,
+        telegramId: current.telegramId,
         costPerMessage: Number(current.costPerMessage),
         smsProvider: current.smsProvider ?? '전역 기본',
-        dailySendLimit: current.dailySendLimit,
-        maxCampaignSize: current.maxCampaignSize,
       },
       newValue: auditNewValue,
     });
