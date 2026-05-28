@@ -1,49 +1,95 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-28 PR #1 squash 머지 완료, 서버 재배포 진행 중)
+> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #3 + PR #4 머지·재배포·라이브 검증 모두 완료)
 >
-> **PR**: https://github.com/joochanyang/SMS/pull/1 — squash 머지됨 (`5840974`), 2026-05-28 06:38:44 UTC. main 동기화 + 원격/로컬 feat 브랜치 삭제 완료.
+> **재개 명령어**: `/clear` 후 "sms문자사이트 다음 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터
 >
-> **재개 명령어**: `/clear` 후 "sms문자사이트 관리자 리팩토링 이어서 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터 진행
+> ### 진행 상태 (감사 계획서 P0~P2 거의 전부 정리됨)
+> - ✅ **PR #3 squash 머지**: `d16397a refactor(admin): users/[id] 페이지 모달 분해 + HTTP randomUUID 폴리필 (#3)` (2026-05-28 19:30 UTC)
+> - ✅ **PR #4 squash 머지**: `37d7007 chore: 출시 후 잡정리 배치 (P1-2 ESLint + P2-3 archive + P2-5 .bkit) (#4)` (2026-05-28 19:34 UTC)
+> - ✅ **서버 HEAD = `37d7007`**, admin 컨테이너 재빌드 → `Up (healthy)`, `Next.js 16.2.3 ✓ Ready` (2026-05-29 04:34 KST)
+> - ✅ **라이브 검증 통과** (2026-05-29):
+>   - PR #3 유저 정보 수정 / 건수 지급 모달 정상 동작 + sudo + AuditLog 기록 OK
+>   - PR #3 HTTP 환경 멱등성 키 폴리필 정상 (Network 탭 `Idempotency-Key` 헤더 확인)
+>   - PR #4 대시보드 프로바이더 잔액 카드 30초 polling 정상, Console에 `set-state-in-effect` 경고 0건
+> - ✅ **머지된 stale 브랜치 4개 정리**: `feat/txg-bulk-send-ops`, `fix/admin-auth-hardening`, `fix/phase1-critical-issues`, `fix/txg-empty-source-addr` (로컬+원격)
 >
-> ### 진행 상태
-> - ✅ **PR #1 squash 머지**: `5840974 feat(admin): dashboard provider balance + user detail 4-card refactor (#1)`
-> - ✅ **로컬 main 동기화**: `git reset --hard origin/main` (충돌 원인 = 로컬에 직접 커밋했던 spec/plan 4건이 squash로 압축되어 충돌, 내용은 squash에 포함되어 손실 0)
-> - ✅ **원격 + 로컬 `feat/admin-dashboard-and-user-detail-refactor` 삭제 완료**
-> - ✅ **서버 git pull 완료**: `/opt/sovereign-sms` HEAD = `5840974`
-> - ✅ **admin 컨테이너 빌드 + 재시작 완료**: `Up (healthy)`, `Next.js 16.2.3 ✓ Ready` (2026-05-28 15:43 KST)
-> - ✅ **DB 검증**: `_prisma_migrations` 에 `20260528120000_add_user_sms_provider` 적용됨, `User.smsProvider TEXT NULL` 컬럼 존재
-> - ⬜ **운영 라이브 검증 대기** (사용자 액션)
+> ### 감사 계획서 (`docs/2026-05-28-prelaunch-code-audit.md`) 잔여 정리 상태
+> | 항목 | 처리 | 비고 |
+> |---|---|---|
+> | P0-1 (.env.bak 삭제) | ✅ | PR #2 |
+> | P1-1 (tsc 4건) | ✅ | PR #2 |
+> | P1-2 (ESLint set-state-in-effect) | ✅ **라이브** | PR #4 = React 19 `useEffectEvent` 패턴 |
+> | P1-3 (tps-chart 삭제) | ✅ | PR #2 (단, `recharts` npm uninstall 은 보류) |
+> | P1-4 (killSwitch state) | ✅ | PR #2 |
+> | P2-2 (users/[id] 분해) | ✅ **라이브** | PR #3 = 630→323줄 + 모달 2개 + uuid 폴리필 |
+> | P2-3 (옛 plan 9개 archive) | ✅ **라이브** | PR #4 |
+> | P2-4 (stale 브랜치 5개) | ✅ 부분 | 머지된 4개 삭제 / `feature/per-user-sms-line` 보류 |
+> | P2-5 (.bkit/, .env.bak* 잔여) | ✅ **라이브** | PR #4 |
+> | P2-6 (_prisma_migrations 중복 row) | ✅ **보존 결정** | 조사 결과 Row 1 = `rolled_back_at=2026-05-28 06:00:18` 박힌 prisma 표준 패턴 (롤백된 시도 흔적 보존). 감사 보고서의 "NULL row 삭제" 명령은 prisma 표준 모르고 작성한 것 — **삭제 금지** |
 >
-> ### 우선순위 순서대로 진행할 일
-> 1. **운영 라이브 검증** — admin 패널 https://5.161.112.248:3301 (또는 운영 도메인):
->    - 로그인 → 대시보드 → 프로바이더 잔액 카드 보이는지
->    - 사용자 관리 → 임의 유저 → 4 카드 표시 + 사이드바 1개
->    - 라우팅 카드 드롭다운 변경 → sudo 모달 → 사유 입력 → 변경 적용 → AuditLog `action='USER_UPDATE'` 확인
->    - 보안 카드: 임의 유저 비밀번호 재설정 → sudo → AuditLog `action='user.password_reset'` 1행 + User.passwordHash 새 값 (User 모델엔 passwordChangedAt 없으니 AuditLog timestamp 로 시점 확인)
->    - 검증 SQL:
->      ```bash
->      PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms \
->        -c "SELECT action, \"adminEmail\", reason, timestamp FROM \"AuditLog\" WHERE action='user.password_reset' OR action='USER_UPDATE' ORDER BY timestamp DESC LIMIT 5;"
->      ```
-> 2. **(옵션) ADMIN 권한 게이트 회귀 테스트**:
->    - 일반 ADMIN 계정 1개 생성 후 비번 재설정 시도 → 403 (SUPER_ADMIN 게이트 검증)
->    - 미생성이면 스킵 가능
-> 3. **`feature/per-user-sms-line` 브랜치 정리** (선택, 본 PR과 독립):
->    - 본 PR 이 라인 오버라이드의 최소 핵심만 흡수했으므로 옛 feature 브랜치는 더 이상 머지 대상이 아님
->    - 실제 발송 경로 라인별 전환(`campaign-processor`, SMPP 워커 라인별 claim, `SmsLog.providerName` 박제)을 하려면 별도 새 브랜치로 재작성 권장
->    - 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line`
+> ### 다음에 할 수 있는 일 (출시 차단 요소 0, 전부 선택)
+> 1. **`feature/per-user-sms-line` 브랜치 정리** (별도 결정 필요): 본 PR(=#1)이 라인 오버라이드의 최소 핵심만 흡수해서 옛 브랜치는 더 이상 머지 대상이 아님. 실제 발송 경로 라인별 전환(`campaign-processor`, SMPP 워커 라인별 claim, `SmsLog.providerName` 박제)은 별도 새 브랜치로 재작성 권장. 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line`
+> 2. **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 현재 옵셔널이라 한도 검사 생략됨. CLAUDE.md "관리자 일일 지급 한도" 정책 활성이라면 연결 필요 (typescript-pro 검증 시 의심 항목으로 박제)
+> 3. **(옵션) ADMIN 권한 게이트 회귀 테스트** — 일반 ADMIN 계정 1개 생성 후 비번 재설정 시도 → 403 (SUPER_ADMIN 게이트 검증). 미생성이면 스킵
+> 4. **(옵션) PR #1 후속**: 발송 경로 라인별 전환 / 비번 재설정 시 유저 이메일·SMS 통보 / NextAuth 활성 세션 강제 종료(invalidate) / 다른 admin 페이지의 `alert()` → `toast` 일괄 교체 / `recharts` npm uninstall
 >
-> ### 본 PR 의 후속 작업(scope 외, 별도 PR)
-> - 발송 경로 라인별 전환 (Track A 의 진짜 동작 부분 재구현)
-> - 비번 재설정 시 유저 이메일/SMS 통보
-> - NextAuth 활성 세션 강제 종료(invalidate)
-> - 다른 admin 페이지의 `alert()` → `toast` 일괄 교체
+> ---
 >
-> ### 본 PR 관련 핵심 파일 위치 (재개 시 빠른 참조)
-> - 설계 spec: `docs/superpowers/specs/2026-05-28-admin-dashboard-user-detail-refactor-design.md`
-> - 구현 plan: `docs/superpowers/plans/2026-05-28-admin-dashboard-user-detail-refactor.md`
-> - 함정 박제: PROGRESS.md §🟢 2026-05-28 관리자 대시보드 + 유저 상세 리팩토링 (바로 아래)
+> ## 🟢 2026-05-29 PR #3 + PR #4 머지·라이브 검증 완료
+>
+> **PR #3** `d16397a` — users/[id] 페이지 모달 2개 분해 + HTTP `randomUUID` 폴리필 (감사 P2-2)
+> **PR #4** `37d7007` — P1-2 ESLint useEffectEvent + P2-3 옛 plan 9개 `docs/archive/` + P2-5 `.bkit/` 정리
+>
+> ### 배포 절차 검증 (다음 PR 때 그대로 재사용)
+> ```bash
+> # 1) 로컬 PR 머지 + sync
+> gh pr merge <N> --squash --delete-branch --subject "<title> (#<N>)"
+> git fetch origin && git pull --ff-only
+>
+> # 2) 서버 진단 (PR #3 때 함정 발견 — 아래 박제 참조)
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && git fetch origin && git status --short && git log --oneline -2'
+>
+> # 3) 서버 git pull + admin 컨테이너만 재빌드 (smpp-worker / user 는 손대지 않음)
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && git pull --ff-only && docker compose up -d --build sovereign-sms-admin'
+>
+> # 4) Healthcheck + HTTP smoke
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && docker compose ps && docker compose logs --tail=10 sovereign-sms-admin'
+> curl -sS -o /dev/null -w "/login HTTP=%{http_code}\n" http://5.161.112.248:3301/login           # 200
+> curl -sS -o /dev/null -w "/api/auth/session HTTP=%{http_code}\n" http://5.161.112.248:3301/api/auth/session  # 401 (예상)
+> ```
+>
+> ### 🚨 신규 함정 박제 — 서버-로컬 동시 작업 충돌 (PR #3 배포 시 발생)
+> **증상**: 서버에서 `git pull --ff-only` 시 `error: The following untracked working tree files would be overwritten by merge`.
+> **원인**: 사용자가 같은 변경을 로컬+서버 양쪽에서 동시 작업 → 로컬은 정식 PR로 머지됐고 서버엔 미커밋 채로 남음. `git pull`이 untracked overwrite 거부.
+> **해결**:
+> 1. **byte-by-byte diff 로 동일성 검증 먼저** (절대 무조건 reset 금지):
+>    ```bash
+>    diff <(git show <mergeCommit>:<path>) <path>; echo EXIT=$?
+>    ```
+>    EXIT=0 이면 동일. 다르면 서버에 사용자 작업이 있는 것 → 사용자 확인 필수.
+> 2. 동일성 확인되면 안전 폐기 + pull:
+>    ```bash
+>    git checkout -- <modified files>          # M 항목 폐기
+>    rm -f <untracked files>                   # ?? 항목 폐기
+>    git pull --ff-only
+>    ```
+> **재발 방지**: 서버에서 직접 코드 편집 금지. 모든 변경은 로컬 → PR → 서버 git pull 경로만.
+>
+> ### 라이브 검증 결과 (2026-05-29)
+> | 항목 | 결과 |
+> |---|---|
+> | PR #3 유저 정보 수정 모달 + sudo + AuditLog `USER_UPDATE` | ✅ |
+> | PR #3 건수 지급/차감 모달 + 멱등성 키 발급 + AuditLog | ✅ |
+> | PR #3 HTTP 환경 `randomUUID` 폴리필 동작 (Network 탭 `Idempotency-Key` 헤더 확인) | ✅ |
+> | PR #4 대시보드 30초 polling 정상 (프로바이더 잔액 카드 자동 갱신) | ✅ |
+> | PR #4 Console 에 `set-state-in-effect` 경고 0건 (React 19 `useEffectEvent` 패턴 효과) | ✅ |
+> | admin 컨테이너 healthy / Next.js 16.2.3 Ready / `/login` 200 / `/api/auth/session` 401 | ✅ |
+>
+> ### 본 세션 추가로 박제할 사실
+> - **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 미전달**: typescript-pro 검증 시 발견. 모달은 옵셔널로 받아 0 폴백이라 한도 검사 생략. 의도면 무해, "관리자 일일 지급 한도" 정책 활성화하려면 부모(`users/[id]/page.tsx`)가 전달 필요.
+> - **`recharts` npm 의존성 잔존**: 감사 P1-3 에서 `tps-chart.tsx` 는 PR #2 에서 삭제됐으나 `recharts` (^3.8.1) 는 양쪽 `package.json` 에 남아 있음. 사용처 0, bundle size 절감 가능. lock 갱신 필요해 별도 PR.
+> - **`@types/bcryptjs` / `@vitejs/plugin-react` 검증 후 제거 가능**: 감사 P3-5 거짓양성 검증에서 도출.
 >
 > ---
 
