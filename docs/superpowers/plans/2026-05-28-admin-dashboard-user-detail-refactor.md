@@ -431,6 +431,8 @@ git commit -m "feat(admin): mount react-hot-toast Toaster in admin shell"
 
 ## Task 3: 가시성 폴링 훅 (`use-visibility-polling`)
 
+**스코프 수정 (2026-05-28):** 원래 `@testing-library/react`로 `renderHook`을 사용하려 했으나, 프로젝트에 해당 의존성이 없고 모든 기존 테스트가 Node 환경의 순수-함수 패턴이다. DOM 환경/testing-library 도입은 본 PR scope 외 변경이라 거부. 대신 `shouldTickNow()` 순수 함수 한 개로 가시성 결정 로직만 분리하여 단위 테스트하고, 훅 자체의 useEffect/setInterval 배선은 T13(라이브 검증)에서 확인한다.
+
 **Files:**
 - Create: `admin/lib/use-visibility-polling.ts`
 - Test: `__tests__/lib/use-visibility-polling.test.ts`
