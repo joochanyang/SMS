@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, CreditCard, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Sidebar from '@/components/sidebar';
-import Header from '@/components/header';
 import DataTable, { Column } from '@/components/data-table';
 import ConfirmModal from '@/components/confirm-modal';
 import SudoModal from '@/components/sudo-modal';
@@ -68,7 +66,6 @@ export default function UserDetailPage() {
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
   const [globalActiveProvider, setGlobalActiveProvider] = useState<string>('infobip');
 
   // Modals
@@ -112,7 +109,6 @@ export default function UserDetailPage() {
 
       const sessionData = await sessionRes.json();
       setAdmin(sessionData.admin);
-      setKillSwitch(sessionData.killSwitch ?? false);
 
       if (userRes.ok) {
         const data = await userRes.json();
@@ -355,15 +351,12 @@ export default function UserDetailPage() {
   const canAdjustCredits = hasPermission(admin.role, 'credit:adjust_small') || hasPermission(admin.role, 'credit:adjust_large');
 
   return (
-    <div className="admin-layout">
-      <Sidebar adminName={admin.name} adminEmail={admin.email} adminRole={admin.role} killSwitchActive={killSwitch} />
-      <div className="admin-main">
-        <Header title="사용자 상세" killSwitchActive={killSwitch} adminName={admin.name} />
-        <main className="admin-content">
-          {/* Back button */}
-          <button className="btn btn-ghost" onClick={() => router.push('/users')} style={{ marginBottom: '16px' }}>
-            <ArrowLeft size={16} /> 목록으로
-          </button>
+    <>
+      {/* Sidebar/Header 는 AdminShell(공통 layout) 이 렌더하므로 이 페이지는 본문만 그린다. */}
+      {/* Back button */}
+      <button className="btn btn-ghost" onClick={() => router.push('/users')} style={{ marginBottom: '16px' }}>
+        <ArrowLeft size={16} /> 목록으로
+      </button>
 
           {user ? (
             <>
@@ -462,8 +455,6 @@ export default function UserDetailPage() {
           ) : (
             <div className="card"><div className="card-body"><p>유저를 찾을 수 없습니다.</p></div></div>
           )}
-        </main>
-      </div>
 
       {/* Suspend/Ban Modal */}
       <ConfirmModal
@@ -634,6 +625,6 @@ export default function UserDetailPage() {
           setSudoRetryAction(null);
         }}
       />
-    </div>
+    </>
   );
 }
