@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { Toaster } from 'react-hot-toast';
 import Sidebar from './sidebar';
 import Header from './header';
 
@@ -109,6 +110,19 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         />
         <main className="admin-content">{children}</main>
       </div>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: 'var(--surface)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
+          },
+          success: { iconTheme: { primary: 'var(--status-success)', secondary: 'var(--surface)' } },
+          error: { iconTheme: { primary: 'var(--status-danger)', secondary: 'var(--surface)' } },
+        }}
+      />
     </div>
   );
 }
