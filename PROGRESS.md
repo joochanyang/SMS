@@ -1,5 +1,37 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
+> ## 🟢 2026-05-28 관리자 대시보드 + 유저 상세 리팩토링 (브랜치 `feat/admin-dashboard-and-user-detail-refactor`, 19 커밋)
+>
+> **변경**:
+> - 대시보드: TPS 차트 제거 → 프로바이더 잔액 카드(클라 30초 polling + visibility 가드)
+> - 유저 상세: 단일 정보 그리드 → 4개 카드(프로필/라우팅/빌링/보안)
+> - 라우팅 카드: 발송 라인 오버라이드를 카드 상단 breadcrumb 으로 노출 (SUPER_ADMIN + sudo 필수)
+> - **보안 카드(신규)**: 관리자가 유저 비밀번호 강제 재설정 (POST `/api/users/[id]/password`, SUPER_ADMIN + sudo + AuditLog)
+> - `react-hot-toast` 도입 + 본 PR scope alert 4개 교체
+> - **유저별 발송 라인 토대 흡수**(Track A 분기 충돌 회피): `User.smsProvider` 컬럼 + `pickProviderName` / `resolveUserProvider` export + PATCH 필드. 발송 경로 변경은 별도 후속 PR.
+>
+> **신규 API**:
+> - `GET /api/sms-providers/balances` — 프로바이더 별 잔액 + 활성 라인. 응답 캐시 10초+SWR 20초. 미설정 프로바이더는 외부 HTTP 호출 스킵.
+> - `POST /api/users/[id]/password` — SUPER_ADMIN + sudo 필수, bcryptjs cost 12, AuditLog action=`user.password_reset` (metadata에 비번 평문/해시 절대 없음)
+>
+> **신규 DB 마이그레이션** (이미 적용됨):
+> - `20260528120000_add_user_sms_provider` — `User.smsProvider TEXT NULLABLE`. ⚠️ 컬럼이 이미 DB에 있어서(`feature/per-user-sms-line` 테스트 흔적) `prisma migrate resolve --applied` 로 마킹 처리함. 머지 후 서버 재배포 시 추가 작업 불필요.
+>
+> **함정 박제**:
+> - **User=bcryptjs cost 12, AdminUser=argon2id**. 혼동 절대 금지. 비번 재설정 라우트는 User 대상이므로 bcryptjs.
+> - **smsto getBalance는 외부 API 호출**. visibility 가드 + 30초 interval 둘 다 적용. 미설정 프로바이더는 fetch 자체 스킵.
+> - **requireSudo 시그니처는 `(req, admin)`** — 인자 순서.
+> - **AuditLog metadata에 비밀번호 평문/해시 절대 금지**. `previousValue/newValue`도 비움.
+> - **User 모델에는 `passwordChangedAt` 컬럼 없음** (그건 AdminUser 전용). 시점은 AuditLog timestamp 로 확인.
+> - **`feature/per-user-sms-line` 브랜치는 머지 안 함** — main 과 크게 분기돼 충돌. 본 PR 이 라인 오버라이드의 최소 핵심만 흡수. SmsLog 박제·campaign-processor 분기·SMPP 워커 라인별 claim 은 별도 후속 PR.
+> - **신규 admin 페이지를 만들 때**: `'use client' + <></>` fragment + Sidebar/Header 직접 렌더 금지 (AdminShell 공통 layout 패턴, 2026-05-28 `0d81615`). T12 가 이걸 놓쳐 한 번 fix 함.
+>
+> **chrome MCP 라이브 검증**: 대시보드 잔액 카드 + 4 카드 + 활성 라인 표시 + sudo 403 분기 모두 동작 확인.
+>
+> **배포**: PR 머지 후 admin 컨테이너 재배포만 필요 (`docker compose up -d --build sovereign-sms-admin`). DB 마이그레이션은 이미 적용된 상태(prisma migrate resolve 로 마킹). 서버 재배포 시 `migrate deploy` 호출되더라도 `Database schema is up to date` 반환됨.
+>
+> **재개**: PR 생성 후 사용자 액션 — 코드 리뷰 + 머지 + 서버 재배포 + 라이브 검증.
+
 > ## 📦 저장소 이전 (2026-05-28)
 > **새 저장소**: `joochanyang/SMS` (https://github.com/joochanyang/SMS)
 > **옛 저장소**: `joocy75-hash/infosms` — 더 이상 push 안 함, 그대로 보존
