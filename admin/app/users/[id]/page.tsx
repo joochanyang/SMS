@@ -11,7 +11,10 @@ import AdminUserProfileCard from '@/components/admin-user-profile-card';
 import AdminUserRoutingCard from '@/components/admin-user-routing-card';
 import AdminUserBillingCard from '@/components/admin-user-billing-card';
 import AdminUserSecurityCard from '@/components/admin-user-security-card';
+import CreditAdjustModal, { type CreditAdjustType, type CreditAdjustUnit } from '@/components/credit-adjust-modal';
+import UserEditModal from '@/components/user-edit-modal';
 import { hasPermission } from '@/lib/rbac';
+import { randomUUID } from '@/lib/uuid';
 
 interface AdminInfo { name: string; email: string; role: string }
 
@@ -74,22 +77,31 @@ export default function UserDetailPage() {
   const [suspendLoading, setSuspendLoading] = useState(false);
 
   const [creditModal, setCreditModal] = useState(false);
-  const [creditAmount, setCreditAmount] = useState('');
-  const [creditType, setCreditType] = useState<'ADMIN_ADD' | 'ADMIN_DEDUCT'>('ADMIN_ADD');
-  const [creditUnit, setCreditUnit] = useState<'KRW' | 'COUNT'>('KRW');
-  const [creditReason, setCreditReason] = useState('');
-  const [creditRequestKey, setCreditRequestKey] = useState<string | null>(null);
+  const [creditType, setCreditType] = useState<CreditAdjustType>('ADMIN_ADD');
   const [creditLoading, setCreditLoading] = useState(false);
+  // 같은 idempotency key 는 모달이 열려 있는 동안 재시도 시 보존된다 (서버 중복 방지).
+  const [creditRequestKey, setCreditRequestKey] = useState<string | null>(null);
+  // sudo 재인증 후 자동 재시도를 위해 마지막 페이로드를 보관.
+  const [pendingCreditPayload, setPendingCreditPayload] = useState<{
+    unit: CreditAdjustUnit;
+    type: CreditAdjustType;
+    count?: number;
+    amount?: number;
+    reason: string;
+  } | null>(null);
   const [showSudoModal, setShowSudoModal] = useState(false);
   const [sudoRetryAction, setSudoRetryAction] = useState<'credit' | 'edit' | null>(null);
 
   const [editModal, setEditModal] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editCostPerMessage, setEditCostPerMessage] = useState('');
-  const [editDailyLimit, setEditDailyLimit] = useState('');
-  const [editMaxCampaign, setEditMaxCampaign] = useState('');
-  const [editReason, setEditReason] = useState('');
   const [editLoading, setEditLoading] = useState(false);
+  // sudo 재인증 후 자동 재시도용
+  const [pendingEditPayload, setPendingEditPayload] = useState<{
+    name?: string;
+    costPerMessage?: number;
+    dailySendLimit?: number;
+    maxCampaignSize?: number;
+    reason: string;
+  } | null>(null);
 
   const [routingSaving, setRoutingSaving] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
@@ -151,91 +163,86 @@ export default function UserDetailPage() {
     }
   }
 
-  async function handleCreditAdjust() {
-    const value = parseFloat(creditAmount);
-    if (isNaN(value) || value <= 0 || creditReason.length < 10) return;
-    if (creditUnit === 'COUNT' && !Number.isInteger(value)) return;
+  async function submitCreditAdjust(payload: {
+    unit: CreditAdjustUnit;
+    type: CreditAdjustType;
+    count?: number;
+    amount?: number;
+    reason: string;
+  }) {
+    setPendingCreditPayload(payload);
     setCreditLoading(true);
     try {
-      const idempotencyKey = creditRequestKey ?? crypto.randomUUID();
+      const idempotencyKey = creditRequestKey ?? randomUUID();
       setCreditRequestKey(idempotencyKey);
       const body: Record<string, unknown> = {
-        unit: creditUnit,
-        type: creditType,
-        reason: creditReason,
+        unit: payload.unit,
+        type: payload.type,
+        reason: payload.reason,
         idempotencyKey,
       };
-      if (creditUnit === 'COUNT') {
-        body.count = value;
+      if (payload.unit === 'COUNT') {
+        body.count = payload.count;
       } else {
-        body.amount = creditType === 'ADMIN_DEDUCT' ? -value : value;
+        body.amount = payload.amount;
       }
       const res = await fetch(`/api/users/${userId}/credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success(creditType === 'ADMIN_ADD' ? '크레딧을 충전했습니다.' : '크레딧을 차감했습니다.');
+        toast.success(
+          payload.type === 'ADMIN_ADD' ? '크레딧을 충전했습니다.' : '크레딧을 차감했습니다.',
+        );
         setCreditModal(false);
-        setCreditAmount('');
-        setCreditReason('');
         setCreditRequestKey(null);
+        setPendingCreditPayload(null);
         await fetchData();
+      } else if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction('credit');
+        setShowSudoModal(true);
       } else {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 403 && data.requireSudo) {
-          setSudoRetryAction('credit');
-          setShowSudoModal(true);
-        } else {
-          toast.error(data.error || '처리에 실패했습니다.');
-        }
+        toast.error(data.error || '처리에 실패했습니다.');
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '네트워크 오류로 실패했습니다.');
     } finally {
       setCreditLoading(false);
     }
   }
 
-  async function handleEdit() {
-    if (editReason.length < 5 || !user) return;
+  async function submitEdit(payload: {
+    name?: string;
+    costPerMessage?: number;
+    dailySendLimit?: number;
+    maxCampaignSize?: number;
+    reason: string;
+  }) {
+    if (!user) return;
+    setPendingEditPayload(payload);
     setEditLoading(true);
     try {
-      const canChangeCostPerMessage = admin?.role === 'SUPER_ADMIN';
-      const body: {
-        reason: string;
-        name?: string;
-        costPerMessage?: number;
-        dailySendLimit?: number;
-        maxCampaignSize?: number;
-      } = { reason: editReason };
-      if (editName) body.name = editName;
-      if (canChangeCostPerMessage && editCostPerMessage) {
-        const nextCostPerMessage = parseFloat(editCostPerMessage);
-        if (nextCostPerMessage !== Number(user.costPerMessage)) {
-          body.costPerMessage = nextCostPerMessage;
-        }
-      }
-      if (editDailyLimit) body.dailySendLimit = parseInt(editDailyLimit);
-      if (editMaxCampaign) body.maxCampaignSize = parseInt(editMaxCampaign);
-
       const res = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         toast.success('사용자 정보를 수정했습니다.');
         setEditModal(false);
+        setPendingEditPayload(null);
         await fetchData();
+      } else if (res.status === 403 && data.requireSudo) {
+        setSudoRetryAction('edit');
+        setShowSudoModal(true);
       } else {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 403 && data.requireSudo) {
-          setSudoRetryAction('edit');
-          setShowSudoModal(true);
-        } else {
-          toast.error(data.error || '수정에 실패했습니다.');
-        }
+        toast.error(data.error || '수정에 실패했습니다.');
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '네트워크 오류로 실패했습니다.');
     } finally {
       setEditLoading(false);
     }
@@ -372,14 +379,7 @@ export default function UserDetailPage() {
                 }}
                 canSuspend={canSuspendUser}
                 canUpdate={canUpdateUser}
-                onEdit={() => {
-                  setEditName(user.name ?? '');
-                  setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
-                  setEditDailyLimit(String(user.dailySendLimit));
-                  setEditMaxCampaign(String(user.maxCampaignSize));
-                  setEditReason('');
-                  setEditModal(true);
-                }}
+                onEdit={() => setEditModal(true)}
                 onSuspend={() => setSuspendModal({ open: true, action: 'SUSPEND' })}
                 onUnsuspend={() => setSuspendModal({ open: true, action: 'UNSUSPEND' })}
                 onBan={() => setSuspendModal({ open: true, action: 'BAN' })}
@@ -402,14 +402,7 @@ export default function UserDetailPage() {
                 canEditCost={canChangeCostPerMessage}
                 onTopUp={() => { setCreditType('ADMIN_ADD'); setCreditModal(true); }}
                 onDeduct={() => { setCreditType('ADMIN_DEDUCT'); setCreditModal(true); }}
-                onEditCost={() => {
-                  setEditName(user.name ?? '');
-                  setEditCostPerMessage(String(Number(user.costPerMessage ?? 14)));
-                  setEditDailyLimit(String(user.dailySendLimit));
-                  setEditMaxCampaign(String(user.maxCampaignSize));
-                  setEditReason('');
-                  setEditModal(true);
-                }}
+                onEditCost={() => setEditModal(true)}
               />
 
               <AdminUserSecurityCard
@@ -481,132 +474,42 @@ export default function UserDetailPage() {
       </ConfirmModal>
 
       {/* Credit Adjustment Modal */}
-      {creditModal && (
-        <div className="modal-overlay" onClick={() => { setCreditModal(false); setCreditRequestKey(null); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <h3 style={{ marginBottom: '16px' }}>
-              {creditType === 'ADMIN_ADD'
-                ? (creditUnit === 'COUNT' ? '건수 지급' : '크레딧 충전')
-                : (creditUnit === 'COUNT' ? '건수 차감' : '크레딧 차감')}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label className="label">단위</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${creditUnit === 'KRW' ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setCreditUnit('KRW')}
-                    style={{ flex: 1 }}
-                  >
-                    금액 (원)
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${creditUnit === 'COUNT' ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setCreditUnit('COUNT')}
-                    style={{ flex: 1 }}
-                  >
-                    건수 (건)
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="label">{creditUnit === 'COUNT' ? '건수 (건)' : '금액 (원)'}</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  step={creditUnit === 'COUNT' ? 1 : 'any'}
-                  value={creditAmount}
-                  onChange={(e) => setCreditAmount(e.target.value)}
-                  placeholder={creditUnit === 'COUNT' ? '건수를 입력하세요' : '금액을 입력하세요'}
-                  style={{ width: '100%' }}
-                />
-                {creditUnit === 'COUNT' && user && Number(creditAmount) > 0 && (
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                    💡 {Number(creditAmount).toLocaleString('ko-KR')}건 × {Number(user.costPerMessage).toLocaleString('ko-KR')}원 = {(Number(creditAmount) * Number(user.costPerMessage)).toLocaleString('ko-KR')}원
-                    {creditType === 'ADMIN_ADD' ? ' 적립' : ' 차감'}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="label">사유 (10자 이상)</label>
-                <textarea
-                  className="input"
-                  rows={3}
-                  value={creditReason}
-                  onChange={(e) => setCreditReason(e.target.value)}
-                  placeholder="사유를 입력하세요..."
-                  style={{ width: '100%', resize: 'vertical' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => { setCreditModal(false); setCreditRequestKey(null); }}>취소</button>
-                <button
-                  className={`btn ${creditType === 'ADMIN_ADD' ? 'btn-primary' : 'btn-danger'}`}
-                  disabled={creditLoading || !creditAmount || creditReason.length < 10}
-                  onClick={handleCreditAdjust}
-                >
-                  {creditLoading && <span className="spinner" />}
-                  {creditType === 'ADMIN_ADD' ? '충전' : '차감'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {creditModal && user && (
+        <CreditAdjustModal
+          type={creditType}
+          userEmail={user.email}
+          userName={user.name}
+          currentCredits={Number(user.credits)}
+          costPerMessage={Number(user.costPerMessage)}
+          loading={creditLoading}
+          onClose={() => {
+            if (creditLoading) return;
+            setCreditModal(false);
+            setCreditRequestKey(null);
+            setPendingCreditPayload(null);
+          }}
+          onSubmit={submitCreditAdjust}
+        />
       )}
 
       {/* Edit Modal */}
-      {editModal && (
-        <div className="modal-overlay" onClick={() => setEditModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <h3 style={{ marginBottom: '16px' }}>사용자 정보 수정</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label className="label">이름</label>
-                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: '100%' }} />
-              </div>
-              <div>
-                <label className="label">건당 단가 (원)</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={editCostPerMessage}
-                  onChange={(e) => setEditCostPerMessage(e.target.value)}
-                  placeholder="14"
-                  disabled={!canChangeCostPerMessage}
-                  style={{ width: '100%' }}
-                />
-                {!canChangeCostPerMessage && (
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                    건당 단가 변경은 최고 관리자 재인증 후 가능합니다.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="label">일일 발송 한도</label>
-                <input className="input" type="number" value={editDailyLimit} onChange={(e) => setEditDailyLimit(e.target.value)} style={{ width: '100%' }} />
-              </div>
-              <div>
-                <label className="label">최대 캠페인 크기</label>
-                <input className="input" type="number" value={editMaxCampaign} onChange={(e) => setEditMaxCampaign(e.target.value)} style={{ width: '100%' }} />
-              </div>
-              <div>
-                <label className="label">사유 (5자 이상)</label>
-                <textarea className="input" rows={2} value={editReason} onChange={(e) => setEditReason(e.target.value)} placeholder="변경 사유..." style={{ width: '100%', resize: 'vertical' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setEditModal(false)}>취소</button>
-                <button className="btn btn-primary" disabled={editLoading || editReason.length < 5} onClick={handleEdit}>
-                  {editLoading && <span className="spinner" />} 저장
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {editModal && user && (
+        <UserEditModal
+          userEmail={user.email}
+          userName={user.name}
+          initialName={user.name ?? ''}
+          initialCostPerMessage={Number(user.costPerMessage ?? 14)}
+          initialDailyLimit={user.dailySendLimit}
+          initialMaxCampaign={user.maxCampaignSize}
+          canEditCost={canChangeCostPerMessage}
+          loading={editLoading}
+          onClose={() => {
+            if (editLoading) return;
+            setEditModal(false);
+            setPendingEditPayload(null);
+          }}
+          onSubmit={submitEdit}
+        />
       )}
 
       <SudoModal
@@ -617,10 +520,10 @@ export default function UserDetailPage() {
         }}
         onSuccess={async () => {
           setShowSudoModal(false);
-          if (sudoRetryAction === 'credit') {
-            await handleCreditAdjust();
-          } else if (sudoRetryAction === 'edit') {
-            await handleEdit();
+          if (sudoRetryAction === 'credit' && pendingCreditPayload) {
+            await submitCreditAdjust(pendingCreditPayload);
+          } else if (sudoRetryAction === 'edit' && pendingEditPayload) {
+            await submitEdit(pendingEditPayload);
           }
           setSudoRetryAction(null);
         }}

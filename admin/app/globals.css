@@ -1,42 +1,48 @@
 :root {
-  /* Brand */
-  --primary: #10B981;
-  --primary-hover: #059669;
-  --primary-light: rgba(16, 185, 129, 0.1);
-  --primary-border: rgba(16, 185, 129, 0.3);
+  /* Brand — 클릭 포인트는 따뜻한 옐로우(amber-400). hover 는 한 톤 진한 amber-500. */
+  --primary: #FACC15;
+  --primary-hover: #EAB308;
+  --primary-light: rgba(250, 204, 21, 0.14);
+  --primary-border: rgba(250, 204, 21, 0.55);
+  --primary-text: #1F2937; /* 옐로우 위 가독 텍스트 (다크 슬레이트). */
 
-  /* Background / Surface */
-  --bg-color: #020617;
-  --surface: #0F172A;
-  --surface-hover: #1E293B;
-  --surface-raised: #162032;
-  --border: rgba(30, 41, 59, 0.5);
-  --border-strong: rgba(51, 65, 85, 0.6);
+  /* Background / Surface — 본문은 살짝 어두운 화이트(stone-100 톤). */
+  --bg-color: #E7EAF0;
+  --surface: #FFFFFF;
+  --surface-hover: #F1F4F9;
+  --surface-raised: #FFFFFF;
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
 
-  /* Text */
-  --text-main: #FFFFFF;
-  --text-secondary: #94A3B8;
+  /* Text — 본문이 밝아졌으니 짙은 슬레이트로. */
+  --text-main: #0F172A;
+  --text-secondary: #475569;
   --text-muted: #64748B;
 
   /* Status */
-  --status-success: #10B981;
-  --status-success-bg: rgba(16, 185, 129, 0.12);
-  --status-warning: #F59E0B;
-  --status-warning-bg: rgba(245, 158, 11, 0.12);
-  --status-danger: #EF4444;
-  --status-danger-bg: rgba(239, 68, 68, 0.12);
-  --status-info: #3B82F6;
-  --status-info-bg: rgba(59, 130, 246, 0.12);
+  --status-success: #16A34A;
+  --status-success-bg: rgba(22, 163, 74, 0.14);
+  --status-warning: #D97706;
+  --status-warning-bg: rgba(217, 119, 6, 0.14);
+  --status-danger: #DC2626;
+  --status-danger-bg: rgba(220, 38, 38, 0.12);
+  --status-info: #2563EB;
+  --status-info-bg: rgba(37, 99, 235, 0.12);
 
-  /* Sidebar */
+  /* Sidebar — 진한 네이비 (slate-900 / navy). 사이드바 내부 텍스트는 항상 밝게. */
   --sidebar-width: 260px;
-  --sidebar-bg: #0B1120;
-  --sidebar-border: rgba(30, 41, 59, 0.4);
-  --sidebar-active-bg: rgba(16, 185, 129, 0.1);
+  --sidebar-bg: #0B1F3D;
+  --sidebar-bg-strong: #081A36;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-active-bg: rgba(250, 204, 21, 0.18);
+  --sidebar-active-fg: #FACC15;
+  --sidebar-text: #E2E8F0;
+  --sidebar-text-muted: rgba(226, 232, 240, 0.65);
 
   /* Header */
   --header-height: 64px;
   --header-blur: 12px;
+  --header-bg: rgba(255, 255, 255, 0.85);
 
   /* Radius */
   --radius-sm: 6px;
@@ -157,13 +163,17 @@ ul, ol {
 .sidebar-logo-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--primary), #059669);
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--primary-text);
   flex-shrink: 0;
+}
+
+.sidebar-logo h1 {
+  color: var(--sidebar-text);
 }
 
 .sidebar-logo h1 {
@@ -177,7 +187,7 @@ ul, ol {
   display: block;
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   letter-spacing: 0;
 }
 
@@ -193,7 +203,7 @@ ul, ol {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
 }
 
 .sidebar-link {
@@ -201,23 +211,24 @@ ul, ol {
   align-items: center;
   gap: 12px;
   padding: 10px 24px;
-  color: var(--text-secondary);
+  color: var(--sidebar-text);
   font-size: 14px;
   font-weight: 500;
   transition: all var(--transition-fast);
   border-left: 3px solid transparent;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .sidebar-link:hover {
-  color: var(--text-main);
-  background: var(--surface-hover);
+  color: var(--sidebar-active-fg);
+  background: var(--sidebar-bg-strong);
 }
 
 .sidebar-link.active {
-  color: var(--primary);
+  color: var(--sidebar-active-fg);
   background: var(--sidebar-active-bg);
-  border-left-color: var(--primary);
+  border-left-color: var(--sidebar-active-fg);
 }
 
 .sidebar-link svg {
@@ -283,18 +294,18 @@ ul, ol {
   gap: 10px;
   padding: 8px 12px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--sidebar-text);
 }
 
 .sidebar-admin-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--surface-hover);
+  background: var(--sidebar-bg-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--sidebar-text);
   flex-shrink: 0;
 }
 
@@ -304,8 +315,8 @@ ul, ol {
 }
 
 .sidebar-admin-info-text .name {
-  font-weight: 500;
-  color: var(--text-main);
+  font-weight: 600;
+  color: var(--sidebar-text);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -314,7 +325,7 @@ ul, ol {
 
 .sidebar-admin-info-text .role {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
 }
 
 .sidebar-logout {
@@ -322,12 +333,15 @@ ul, ol {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   font-size: 13px;
   font-weight: 500;
   width: 100%;
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .sidebar-logout:hover {
@@ -783,13 +797,15 @@ ul, ol {
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-text);
   border-color: var(--primary);
+  font-weight: 700;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+  color: var(--primary-text);
 }
 
 .btn-danger {
@@ -815,14 +831,27 @@ ul, ol {
   border-color: var(--border-strong);
 }
 
+.btn-outline {
+  background: transparent;
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--text-main);
+}
+
 .btn-outline-danger {
   background: transparent;
   color: var(--status-danger);
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(220, 38, 38, 0.35);
 }
 
 .btn-outline-danger:hover:not(:disabled) {
   background: var(--status-danger-bg);
+  border-color: var(--status-danger);
 }
 
 /* ============================================================
@@ -833,7 +862,8 @@ ul, ol {
   margin-bottom: 20px;
 }
 
-.form-label {
+.form-label,
+.label {
   display: block;
   font-size: 13px;
   font-weight: 600;
@@ -841,30 +871,41 @@ ul, ol {
   margin-bottom: 6px;
 }
 
-.form-input {
+.form-input,
+.input {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-color);
-  border: 1px solid var(--border);
+  background: #FFFFFF;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: var(--text-main);
   font-size: 14px;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  font-family: inherit;
 }
 
-.form-input:focus {
+.form-input:focus,
+.input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-light);
 }
 
-.form-input::placeholder {
+.form-input::placeholder,
+.input::placeholder {
   color: var(--text-muted);
 }
 
-textarea.form-input {
+textarea.form-input,
+textarea.input {
   resize: vertical;
   min-height: 80px;
+}
+
+.input:disabled {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 /* ============================================================
@@ -883,15 +924,24 @@ textarea.form-input {
   padding: 16px;
 }
 
-.modal {
+.modal,
+.modal-content {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  padding: 20px;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.32);
+  color: var(--text-main);
+}
+
+.modal-content h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .modal-header {

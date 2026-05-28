@@ -78,10 +78,10 @@ export default function AdminUserBillingCard({
         {canAdjustCredits && (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary btn-sm" onClick={onTopUp}>
-              <Plus size={14} /> 충전
+              <Plus size={14} /> 건수 지급
             </button>
             <button className="btn btn-outline-danger btn-sm" onClick={onDeduct}>
-              <Minus size={14} /> 차감
+              <Minus size={14} /> 건수 차감
             </button>
           </div>
         )}
