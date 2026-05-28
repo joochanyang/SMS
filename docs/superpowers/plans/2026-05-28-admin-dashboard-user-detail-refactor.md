@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16.2.3, React 19, TypeScript, Prisma 7.7, PostgreSQL, vitest, zod, bcryptjs(유저), argon2(어드민, 본 PR에선 사용 안 함), react-hot-toast(신규).
 
-**전제(Precondition):** `feature/per-user-sms-line` 브랜치가 main에 이미 머지되어 있어야 한다(`User.smsProvider` 컬럼, PATCH 라우트의 smsProvider 필드, resolveUserProvider, SMPP 워커 라인별 claim 코드). 미머지면 본 plan 진입 전에 별도 PR로 머지 + SMPP 워커 재배포가 선결.
+**Scope 변경(2026-05-28 plan 수정):** 원래 plan은 `feature/per-user-sms-line` 머지를 전제로 했으나, 그 브랜치가 main과 크게 분기돼 있어(admin-shell 재구조·세션 하드닝·import 도구와 충돌) 안전한 별도 머지가 어렵다. 따라서 본 PR이 라인 오버라이드의 **최소 핵심**(스키마 + resolver + PATCH 라우트)만 신규 작성 형태로 흡수한다. `SmsLog.providerName` 박제, `campaign-processor` 분기, `services/smpp-worker/poller` 라인별 claim 같은 발송 경로 변경은 본 PR scope 외. 본 PR 머지 후 발송 경로는 **전역 활성 라인을 그대로 사용**하며, 유저 오버라이드는 UI 상에서 표시·기록·향후 사용을 위한 데이터 준비 상태로 둔다. 별도 후속 PR에서 발송 경로를 라인별로 전환할 수 있다.
 
 **브랜치:** `feat/admin-dashboard-and-user-detail-refactor` (main 분기)
 
@@ -19,6 +19,7 @@
 **생성 (Backend):**
 - `admin/app/api/sms-providers/balances/route.ts` — 프로바이더 잔액 조회 (GET)
 - `admin/app/api/users/[id]/password/route.ts` — 유저 비번 재설정 (POST)
+- `prisma/migrations/<timestamp>_add_user_sms_provider/migration.sql` — User.smsProvider 컬럼 추가
 
 **생성 (Frontend 컴포넌트):**
 - `admin/components/provider-balance-grid.tsx` — 잔액 카드 그리드 (가시성 가드 폴링)
@@ -37,7 +38,11 @@
 - `admin/components/admin-shell.tsx` — `<Toaster />` 마운트
 - `admin/app/dashboard-client.tsx` — TPS 영역 제거 + `<ProviderBalanceGrid />` 마운트
 - `admin/app/api/dashboard/route.ts` — 응답에서 `tpsData` 제거(집계 코드는 유지)
-- `admin/app/users/[id]/page.tsx` — 카드 4개 조립 + alert→toast 교체 + 기존 editModal에서 발송 라인 드롭다운 제거
+- `admin/app/users/[id]/page.tsx` — 카드 4개 조립 + alert→toast 교체
+- `admin/app/api/users/[id]/route.ts` — PATCH 에 `smsProvider` zod 필드 + sudo 게이트 + 응답 select 추가
+- `admin/app/api/users/[id]/route.ts` GET — 응답 select에 `smsProvider` 추가
+- `lib/sms-providers/router.ts` — `resolveUserProvider(userId)` export 추가 (전역 폴백)
+- `prisma/schema.prisma` — `User.smsProvider String?` 컬럼 추가
 - `admin/package.json` — `react-hot-toast` 추가
 
 **유지(변경 없음):**
@@ -58,13 +63,12 @@ cd ~/Desktop/sms문자사이트
 git fetch origin
 git checkout main
 git pull --ff-only origin main
-# feature/per-user-sms-line 머지 확인 (User.smsProvider 컬럼 존재해야 함)
-grep -n "smsProvider" prisma/schema.prisma
-# 비어있으면 STOP — feature 브랜치 머지 선결
 git checkout -b feat/admin-dashboard-and-user-detail-refactor
 ```
 
-Expected: `prisma/schema.prisma`에 `smsProvider String?` 라인이 존재. 없으면 진행 중단하고 사용자에게 보고.
+Expected: 새 브랜치 `feat/admin-dashboard-and-user-detail-refactor` 생성·체크아웃. 작업 트리 clean.
+
+> **Note:** 본 plan은 `feature/per-user-sms-line` 머지 없이 진행한다(분기 충돌로 위험). 라인 오버라이드의 최소 핵심(스키마+resolver+PATCH)은 Task 1.5에서 신규 작성한다.
 
 - [ ] **Step 2: react-hot-toast 설치**
 
@@ -81,6 +85,291 @@ Expected: `admin/package.json` 의 `dependencies` 에 `"react-hot-toast": "^2.4.
 cd ~/Desktop/sms문자사이트
 git add admin/package.json admin/package-lock.json
 git commit -m "chore(admin): add react-hot-toast for admin toasts"
+```
+
+---
+
+## Task 1.5: 유저별 발송 라인 토대 (스키마 + resolver + PATCH)
+
+본 task는 라인 오버라이드 UI(Task 9)와 페이지 재조립(Task 12)에서 필요한 데이터 토대를 만든다. 발송 경로 자체는 바꾸지 않는다(전역 라인 유지). resolver는 향후 발송 경로 전환을 위해 미리 export해 두지만, 본 PR에서는 사용처를 추가하지 않는다 — **dead code 가 아님**을 RoutingCard UI가 활성 라인 표시에 간접 활용함으로 보증한다.
+
+**Files:**
+- Modify: `prisma/schema.prisma`
+- Create: `prisma/migrations/<timestamp>_add_user_sms_provider/migration.sql`
+- Modify: `lib/sms-providers/router.ts`
+- Modify: `admin/app/api/users/[id]/route.ts`
+- Test: `__tests__/lib/resolve-user-provider.test.ts`
+
+- [ ] **Step 1: schema 컬럼 추가**
+
+`prisma/schema.prisma` 의 `model User` 안 `maxCampaignSize Int @default(5000)` 다음 줄에 추가:
+
+```prisma
+  smsProvider        String?   // 유저 배정 발송 라인 (infobip|smsto|txg). null = 전역 기본 폴백
+```
+
+- [ ] **Step 2: migration 생성**
+
+```bash
+cd ~/Desktop/sms문자사이트
+npx prisma migrate dev --name add_user_sms_provider --create-only
+```
+
+Expected: `prisma/migrations/<timestamp>_add_user_sms_provider/migration.sql` 생성. 내용 확인:
+
+```sql
+ALTER TABLE "User" ADD COLUMN "smsProvider" TEXT;
+```
+
+다른 ALTER가 끼어 있으면 schema 비교 오류 — 마이그레이션 파일에서 의도하지 않은 라인 제거 후 다시 생성.
+
+- [ ] **Step 3: prisma client 재생성**
+
+```bash
+cd ~/Desktop/sms문자사이트
+npx prisma generate
+```
+
+- [ ] **Step 4: resolveUserProvider 테스트 작성**
+
+`__tests__/lib/resolve-user-provider.test.ts`:
+
+```ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// prisma·provider 의존을 mock — 함수 동작만 검증
+vi.mock('@/prisma', () => ({ prisma: { user: { findUnique: vi.fn() }, systemSetting: { findUnique: vi.fn() } } }));
+vi.mock('@/sms-providers/infobip', () => ({ InfobipProvider: class { name = 'infobip'; isConfigured() { return true; } } }));
+vi.mock('@/sms-providers/smsto', () => ({ SmsToProvider: class { name = 'smsto'; isConfigured() { return true; } } }));
+vi.mock('@/sms-providers/txg', () => ({ TxgProvider: class { name = 'txg'; isConfigured() { return true; } } }));
+vi.mock('@/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+
+// vi.mock 경로 alias 조정 필요 — 실제 import 경로에 맞춤
+// 실제 파일은 `lib/sms-providers/router.ts` → import { resolveUserProvider } from '../../lib/sms-providers/router';
+
+import { prisma } from '../../lib/prisma';
+import { resolveUserProvider } from '../../lib/sms-providers/router';
+
+describe('resolveUserProvider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('User.smsProvider 가 null 이면 전역 활성 라인을 반환한다', async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ smsProvider: null });
+    (prisma.systemSetting.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      value: { provider: 'infobip' },
+    });
+    const p = await resolveUserProvider('u1');
+    expect((p as { isConfigured: () => boolean }).isConfigured()).toBe(true);
+  });
+
+  it('User.smsProvider 가 유효한 라인이면 그 라인을 반환한다', async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ smsProvider: 'smsto' });
+    const p = await resolveUserProvider('u1');
+    // smsto Provider 인스턴스 — name 확인은 internal 이라 구조 검증으로 대체
+    expect(p).toBeDefined();
+  });
+
+  it('User.smsProvider 가 알 수 없는 값이면 전역 폴백', async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ smsProvider: 'unknown' });
+    (prisma.systemSetting.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      value: { provider: 'infobip' },
+    });
+    const p = await resolveUserProvider('u1');
+    expect(p).toBeDefined();
+  });
+});
+```
+
+**주의:** 위 mock 경로 alias 는 프로젝트 vitest 설정의 path mapping 에 의존한다. 실제 import 가 동작하지 않으면 다음 단순화된 검증으로 대체 가능:
+
+대체안 — `resolveUserProvider`를 작게 분리하여 순수 함수 `pickProviderName(userSetting, globalSetting)` 만 단위 테스트:
+
+```ts
+// lib/sms-providers/router.ts 내에 추가
+export function pickProviderName(
+  userSetting: string | null | undefined,
+  globalSetting: string,
+): 'infobip' | 'smsto' | 'txg' {
+  const known = ['infobip', 'smsto', 'txg'] as const;
+  if (userSetting && (known as readonly string[]).includes(userSetting)) {
+    return userSetting as 'infobip' | 'smsto' | 'txg';
+  }
+  if ((known as readonly string[]).includes(globalSetting)) {
+    return globalSetting as 'infobip' | 'smsto' | 'txg';
+  }
+  return 'infobip';
+}
+```
+
+이 경우 테스트는 mock 없이 순수 함수만 검증:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { pickProviderName } from '../../lib/sms-providers/router';
+
+describe('pickProviderName', () => {
+  it('user override 있으면 그 라인', () => {
+    expect(pickProviderName('smsto', 'infobip')).toBe('smsto');
+  });
+  it('user null 이면 global', () => {
+    expect(pickProviderName(null, 'smsto')).toBe('smsto');
+  });
+  it('user unknown 이면 global', () => {
+    expect(pickProviderName('xxx', 'infobip')).toBe('infobip');
+  });
+  it('global도 unknown 이면 infobip 기본', () => {
+    expect(pickProviderName(null, 'yyy')).toBe('infobip');
+  });
+  it('둘 다 null/undefined 면 infobip', () => {
+    expect(pickProviderName(undefined, '')).toBe('infobip');
+  });
+});
+```
+
+**구현자 판단**: mock 경로가 안정적이면 첫 번째 테스트를, 아니면 `pickProviderName` 추출 방식을 채택한다. 본 plan은 두 번째 방식을 권장(테스트 안정성↑).
+
+- [ ] **Step 5: 테스트 실행 — 실패 확인**
+
+```bash
+cd ~/Desktop/sms문자사이트
+npx vitest run __tests__/lib/resolve-user-provider.test.ts
+```
+
+Expected: FAIL ("Cannot find module" 또는 "pickProviderName is not exported").
+
+- [ ] **Step 6: router.ts 에 resolveUserProvider + pickProviderName 구현**
+
+`lib/sms-providers/router.ts` 끝에 (혹은 적절한 위치에) 추가. 기존 import 들은 그대로:
+
+```ts
+const KNOWN_PROVIDERS = ['infobip', 'smsto', 'txg'] as const;
+type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
+
+export function pickProviderName(
+  userSetting: string | null | undefined,
+  globalSetting: string,
+): KnownProvider {
+  if (userSetting && (KNOWN_PROVIDERS as readonly string[]).includes(userSetting)) {
+    return userSetting as KnownProvider;
+  }
+  if ((KNOWN_PROVIDERS as readonly string[]).includes(globalSetting)) {
+    return globalSetting as KnownProvider;
+  }
+  return 'infobip';
+}
+
+/**
+ * 유저별 발송 라인 SmsProvider 인스턴스를 반환한다.
+ * - User.smsProvider 가 유효한 라인이면 그 라인.
+ * - null/unknown 이거나 isConfigured()=false 이면 전역 활성 라인으로 폴백.
+ * - 본 PR 에서는 발송 경로에서 호출하지 않는다 (관리자 UI 표시 + 향후 발송 경로 전환용 토대).
+ */
+export async function resolveUserProvider(userId: string): Promise<SmsProvider> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { smsProvider: true },
+  });
+
+  const userRaw = user?.smsProvider ?? null;
+  if (userRaw && (KNOWN_PROVIDERS as readonly string[]).includes(userRaw)) {
+    const candidate = PROVIDERS[userRaw as KnownProvider]();
+    if (candidate.isConfigured()) {
+      return candidate;
+    }
+    logger.warn(`[SmsRouter] 유저 ${userId} 의 라인 ${userRaw} 가 미설정 — 전역 활성 라인으로 폴백`);
+  }
+  return getActiveProvider();
+}
+```
+
+(`PROVIDERS`, `getActiveProvider`, `SmsProvider`, `logger`, `prisma` 는 이미 router.ts 에 import 돼 있음 — 동일 위치에 추가만)
+
+- [ ] **Step 7: 테스트 재실행 — 통과 확인**
+
+```bash
+cd ~/Desktop/sms문자사이트
+npx vitest run __tests__/lib/resolve-user-provider.test.ts
+```
+
+Expected: 5 tests PASS.
+
+- [ ] **Step 8: PATCH /api/users/[id] 에 smsProvider 필드 추가**
+
+`admin/app/api/users/[id]/route.ts` 의 `updateUserSchema` (zod) 에 추가:
+
+```ts
+const updateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  costPerMessage: z.number().positive('건당 단가는 0보다 커야 합니다.').optional(),
+  smsProvider: z.enum(['infobip', 'smsto', 'txg']).nullable().optional(),
+  dailySendLimit: z.number().int().min(0).optional(),
+  maxCampaignSize: z.number().int().min(0).optional(),
+  reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
+});
+```
+
+PATCH 핸들러 안:
+- 파싱 후 `smsProvider` 가 `undefined` 가 아니면 SUPER_ADMIN sudo 요구(기존 costPerMessage 처리와 동일 게이트).
+- 변경 항목으로 `updateData.smsProvider = parsed.data.smsProvider ?? null` 추가.
+- `auditNewValue.smsProvider = (parsed.data.smsProvider ?? '전역 기본')`.
+
+기존 `costPerMessage` 처리 블록 바로 옆에 추가하는 게 패턴 일치. **기존 PATCH 핸들러의 정확한 분기 위치를 읽어 거기 맞춰 삽입할 것** (구현자가 직접 보고 결정).
+
+GET 핸들러의 `select` 에 `smsProvider: true` 추가:
+
+```ts
+const user = await prisma.user.findUnique({
+  where: { id },
+  select: {
+    id: true,
+    username: true,
+    email: true,
+    name: true,
+    credits: true,
+    status: true,
+    suspendedAt: true,
+    suspendReason: true,
+    costPerMessage: true,
+    smsProvider: true, // ← 추가
+    dailySendLimit: true,
+    maxCampaignSize: true,
+    failedLoginCount: true,
+    lockedUntil: true,
+    createdAt: true,
+    updatedAt: true,
+  },
+});
+```
+
+- [ ] **Step 9: 빌드 확인**
+
+```bash
+cd ~/Desktop/sms문자사이트/admin
+npm run build 2>&1 | tail -15
+```
+
+Expected: 빌드 성공.
+
+- [ ] **Step 10: 마이그레이션을 DB에 적용**
+
+⚠️ **이 단계는 사용자 확인 후 진행**. 운영 DB에 컬럼이 추가됨(NULL allow, 안전한 변경이지만 명시 게이트).
+
+```bash
+# 로컬 dev DB 가 있다면:
+cd ~/Desktop/sms문자사이트
+npx prisma migrate deploy
+```
+
+운영 DB 적용은 PR 머지 후 컨테이너 재배포 시 `migrate deploy` 가 자동 실행됨 확인. 자동 실행 안 되면 `~/Desktop/홈서버-Docker-배포가이드.md` 절차로 수동 수행.
+
+- [ ] **Step 11: 커밋**
+
+```bash
+cd ~/Desktop/sms문자사이트
+git add prisma/schema.prisma prisma/migrations/ lib/sms-providers/router.ts admin/app/api/users/'[id]'/route.ts __tests__/lib/resolve-user-provider.test.ts
+git commit -m "feat: User.smsProvider column + resolveUserProvider + PATCH smsProvider field"
 ```
 
 ---
