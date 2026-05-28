@@ -96,6 +96,8 @@ export default function UserDetailPage() {
 
   const [routingSaving, setRoutingSaving] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
+  // 비밀번호 재설정 성공 후 카드 내부 폼 상태(평문 비번 포함)를 즉시 unmount 하기 위해 key 를 bump 한다.
+  const [securityFormKey, setSecurityFormKey] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -281,6 +283,8 @@ export default function UserDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         toast.success('비밀번호를 재설정했습니다.');
+        // 카드를 새 key 로 강제 unmount → 입력된 평문 비밀번호 state 즉시 폐기.
+        setSecurityFormKey((k) => k + 1);
       } else if (res.status === 403 && data.requireSudo) {
         setSudoRetryAction(null);
         setShowSudoModal(true);
@@ -416,6 +420,7 @@ export default function UserDetailPage() {
               />
 
               <AdminUserSecurityCard
+                key={securityFormKey}
                 canReset={admin?.role === 'SUPER_ADMIN'}
                 saving={pwSaving}
                 onSubmit={handlePasswordReset}
