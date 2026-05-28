@@ -9,18 +9,6 @@ import { handleApiError } from '@shared/api-error';
 import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function maskEmail(email: string): string {
-  const [local, domain] = email.split('@');
-  if (!domain) return '***';
-  const masked = local.length <= 2 ? '*'.repeat(local.length) : local.slice(0, 2) + '*'.repeat(local.length - 2);
-  return `${masked}@${domain}`;
-}
-
-
-// ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
 
@@ -29,18 +17,17 @@ const searchSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED', 'BANNED']).optional(),
   minCredits: z.coerce.number().optional(),
   maxCredits: z.coerce.number().optional(),
-  sortBy: z.enum(['createdAt', 'credits', 'name', 'email']).optional().default('createdAt'),
+  sortBy: z.enum(['createdAt', 'credits', 'name', 'username']).optional().default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 const createUserSchema = z.object({
-  email: z.string().email('유효한 이메일을 입력하세요.'),
+  username: z.string().min(3, '아이디는 최소 3자 이상이어야 합니다.'),
   name: z.string().min(1, '이름을 입력하세요.'),
   password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
-  dailySendLimit: z.number().int().min(0).optional(),
-  maxCampaignSize: z.number().int().min(0).optional(),
+  telegramId: z.string().trim().min(1).optional(),
 }).strict();
 
 // ---------------------------------------------------------------------------
@@ -70,8 +57,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { email: { contains: search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
         { name: { contains: search, mode: 'insensitive' } },
+        { telegramId: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -95,13 +83,13 @@ export async function GET(request: NextRequest) {
         take: limit,
         select: {
           id: true,
+          username: true,
           email: true,
+          telegramId: true,
           name: true,
           credits: true,
           costPerMessage: true,
           status: true,
-          dailySendLimit: true,
-          maxCampaignSize: true,
           createdAt: true,
           updatedAt: true,
           suspendedAt: true,
@@ -110,13 +98,7 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    // Mask sensitive data
-    const masked = users.map((u) => ({
-      ...u,
-      email: u.email ? maskEmail(u.email) : null,
-    }));
-
-    return NextResponse.json({ users: masked, total, page, limit });
+    return NextResponse.json({ users, total, page, limit });
   } catch (err) {
     return handleApiError(err, 'users');
   }
@@ -141,15 +123,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, name, password, dailySendLimit, maxCampaignSize } = parsed.data;
+    const { username, name, password, telegramId } = parsed.data;
 
-    // Check duplicate by username OR email (username is unique, email column is not)
-    const existing = await prisma.user.findFirst({
-      where: { OR: [{ username: email }, { email }] },
+    // 아이디 중복 검사
+    const existingUsername = await prisma.user.findUnique({
+      where: { username },
       select: { id: true },
     });
-    if (existing) {
-      return NextResponse.json({ error: '이미 등록된 계정입니다.' }, { status: 409 });
+    if (existingUsername) {
+      return NextResponse.json({ error: '이미 등록된 아이디입니다.' }, { status: 409 });
+    }
+
+    // 텔레그램 아이디 중복 검사 (입력 시에만)
+    if (telegramId) {
+      const existingTg = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { id: true },
+      });
+      if (existingTg) {
+        return NextResponse.json({ error: '이미 등록된 텔레그램 아이디입니다.' }, { status: 409 });
+      }
     }
 
     // 유저 로그인(lib/auth.ts)이 bcrypt.compare를 사용하므로 bcrypt로 해싱
@@ -157,28 +150,25 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.create({
       data: {
-        username: email,
-        email,
+        username,
         name,
         passwordHash,
         credits: 0,
-        ...(dailySendLimit !== undefined && { dailySendLimit }),
-        ...(maxCampaignSize !== undefined && { maxCampaignSize }),
+        ...(telegramId && { telegramId }),
       },
       select: {
         id: true,
-        email: true,
+        username: true,
+        telegramId: true,
         name: true,
         credits: true,
         status: true,
-        dailySendLimit: true,
-        maxCampaignSize: true,
         createdAt: true,
       },
     });
 
-    await logAdminAction(admin, 'USER_CREATE', 'User', user.id, `유저 생성: ${email}`, request, {
-      newValue: { email, name, credits: 0, dailySendLimit, maxCampaignSize },
+    await logAdminAction(admin, 'USER_CREATE', 'User', user.id, `유저 생성: ${username}`, request, {
+      newValue: { username, name, telegramId, credits: 0 },
     });
 
     return NextResponse.json({ user }, { status: 201 });

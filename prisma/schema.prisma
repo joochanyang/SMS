@@ -20,6 +20,7 @@ model User {
   dailySendLimit  Int       @default(10000)
   maxCampaignSize    Int       @default(5000)
   smsProvider        String?   // 유저 배정 발송 라인 (infobip|smsto|txg). null = 전역 기본 폴백
+  telegramId         String?   @unique  // 텔레그램 아이디 (선택). 가입 시 또는 관리자 수정으로 입력
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
   createdAt          DateTime  @default(now())

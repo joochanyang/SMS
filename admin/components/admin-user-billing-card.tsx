@@ -1,12 +1,11 @@
 'use client';
 
 import { CreditCard, Plus, Minus, Edit3 } from 'lucide-react';
+import { formatCountWithKrw } from '@/lib/credit-units';
 
 interface Props {
   credits: number;
   costPerMessage: number;
-  dailySendLimit: number;
-  maxCampaignSize: number;
   canAdjustCredits: boolean;
   canEditCost: boolean;
   onTopUp: () => void;
@@ -17,8 +16,6 @@ interface Props {
 export default function AdminUserBillingCard({
   credits,
   costPerMessage,
-  dailySendLimit,
-  maxCampaignSize,
   canAdjustCredits,
   canEditCost,
   onTopUp,
@@ -36,16 +33,15 @@ export default function AdminUserBillingCard({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
             gap: '14px',
             marginBottom: '14px',
           }}
         >
           <div>
-            <span className="label">크레딧</span>
+            <span className="label">남은 건수</span>
             <p style={{ fontWeight: 700, fontSize: '20px' }}>
-              {'₩'}
-              {credits.toLocaleString('ko-KR')}
+              {formatCountWithKrw(credits, costPerMessage)}
             </p>
           </div>
           <div>
@@ -64,14 +60,6 @@ export default function AdminUserBillingCard({
                 </button>
               )}
             </p>
-          </div>
-          <div>
-            <span className="label">일일 발송 한도</span>
-            <p>{dailySendLimit.toLocaleString('ko-KR')}건</p>
-          </div>
-          <div>
-            <span className="label">최대 캠페인 크기</span>
-            <p>{maxCampaignSize.toLocaleString('ko-KR')}건</p>
           </div>
         </div>
 

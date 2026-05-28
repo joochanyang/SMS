@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, CreditCard } from 'lucide-react';
 import DataTable, { Column } from '@/components/data-table';
+import { formatCountWithKrw } from '@/lib/credit-units';
 
 interface LedgerRow {
   id: string;
@@ -15,6 +16,12 @@ interface LedgerRow {
   description: string;
   adminId: string | null;
   createdAt: string;
+  user: {
+    id: string;
+    username: string;
+    name: string | null;
+    costPerMessage: number;
+  };
 }
 
 const typeLabels: Record<string, string> = {
@@ -57,17 +64,27 @@ export default function CreditsPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const columns: Column<LedgerRow>[] = [
-    { key: 'userId', label: '유저 ID', width: '120px', render: (row) => <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{row.userId.slice(0, 10)}...</span> },
+    {
+      key: 'user',
+      label: '아이디',
+      width: '160px',
+      render: (row) => (
+        <span style={{ fontWeight: 500 }}>{row.user?.username ?? row.userId.slice(0, 10)}</span>
+      ),
+    },
     { key: 'type', label: '유형', render: (row) => <span className={`badge ${row.amount >= 0 ? 'badge-active' : 'badge-suspended'}`}>{typeLabels[row.type] ?? row.type}</span> },
     {
-      key: 'amount', label: '금액',
+      key: 'amount', label: '변동',
       render: (row) => (
         <span style={{ color: row.amount >= 0 ? 'var(--status-success)' : 'var(--status-danger)', fontWeight: 600 }}>
-          {row.amount >= 0 ? '+' : ''}{'\u20A9'}{row.amount.toLocaleString('ko-KR')}
+          {formatCountWithKrw(row.amount, row.user?.costPerMessage ?? 14, { signed: true })}
         </span>
       ),
     },
-    { key: 'balanceAfter', label: '잔액', render: (row) => `\u20A9${row.balanceAfter.toLocaleString('ko-KR')}` },
+    {
+      key: 'balanceAfter', label: '잔여',
+      render: (row) => formatCountWithKrw(row.balanceAfter, row.user?.costPerMessage ?? 14),
+    },
     { key: 'description', label: '설명' },
     { key: 'createdAt', label: '일시', render: (row) => new Date(row.createdAt).toLocaleString('ko-KR') },
   ];

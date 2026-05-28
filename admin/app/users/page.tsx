@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Users as UsersIcon } from 'lucide-react';
 import DataTable, { Column } from '@/components/data-table';
+import { formatCountWithKrw } from '@/lib/credit-units';
 
 interface UserRow {
   id: string;
-  email: string;
+  username: string;
+  telegramId: string | null;
   name: string;
   credits: number;
   costPerMessage: number;
@@ -84,19 +86,28 @@ export default function UsersPage() {
 
   const columns: Column<UserRow>[] = [
     {
-      key: 'email',
-      label: '이메일',
+      key: 'username',
+      label: '아이디',
       sortable: true,
-      render: (row) => <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>{row.email}</span>,
+      render: (row) => <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>{row.username}</span>,
+    },
+    {
+      key: 'telegramId',
+      label: '텔레그램',
+      render: (row) => (
+        <span style={{ color: row.telegramId ? 'var(--text-main)' : 'var(--text-muted)' }}>
+          {row.telegramId ?? '—'}
+        </span>
+      ),
     },
     { key: 'name', label: '이름', sortable: true },
     {
       key: 'credits',
-      label: '크레딧',
+      label: '남은 건수',
       sortable: true,
       render: (row) => (
         <span style={{ fontWeight: 600 }}>
-          {'\u20A9'}{row.credits.toLocaleString('ko-KR')}
+          {formatCountWithKrw(row.credits, row.costPerMessage ?? 14)}
         </span>
       ),
     },
@@ -106,7 +117,7 @@ export default function UsersPage() {
       sortable: false,
       render: (row) => (
         <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
-          {'\u20A9'}{Number(row.costPerMessage ?? 14).toLocaleString('ko-KR')}
+          {'₩'}{Number(row.costPerMessage ?? 14).toLocaleString('ko-KR')}
         </span>
       ),
     },
@@ -136,7 +147,7 @@ export default function UsersPage() {
             <div className="filter-search">
               <Search size={16} className="search-icon" />
               <input
-                placeholder="이메일 또는 이름 검색..."
+                placeholder="아이디 · 이름 · 텔레그램 검색..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
