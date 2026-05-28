@@ -1,5 +1,52 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
+> ## 🔴 다음 세션 재개 지점 (2026-05-28 PR #1 생성 후, 사용자 액션 대기)
+>
+> **PR**: https://github.com/joochanyang/SMS/pull/1 — `feat/admin-dashboard-and-user-detail-refactor` → `main`, 19 커밋, +1336/-129
+>
+> **재개 명령어**: `/clear` 후 "sms문자사이트 관리자 리팩토링 이어서 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터 진행
+>
+> ### 우선순위 순서대로 진행할 일
+> 1. **PR #1 리뷰 + 머지** (사용자 액션):
+>    - https://github.com/joochanyang/SMS/pull/1 에서 코드 확인 → Approve & Merge
+>    - 머지 충돌은 없을 것 (main 기준 19 커밋 직선)
+> 2. **서버 재배포** — Hetzner `/opt/sovereign-sms`:
+>    ```bash
+>    ssh root@5.161.112.248 'cd /opt/sovereign-sms && git pull origin main && docker compose up -d --build sovereign-sms-admin'
+>    ```
+>    - `prisma migrate deploy` 가 자동 실행되더라도 `Database schema is up to date` 반환 (이미 마킹됨)
+>    - 다른 컨테이너(SMPP 워커, nginx) 재배포 불필요
+> 3. **운영 라이브 검증** — admin 패널 https://5.161.112.248:3301 (또는 운영 도메인):
+>    - 로그인 → 대시보드 → 프로바이더 잔액 카드 보이는지
+>    - 사용자 관리 → 임의 유저 → 4 카드 표시 + 사이드바 1개
+>    - 라우팅 카드 드롭다운 변경 → sudo 모달 → 사유 입력 → 변경 적용 → AuditLog `action='user.smsProvider_update'` 또는 `USER_UPDATE` 확인
+>    - 보안 카드: 임의 유저 비밀번호 재설정 → sudo → AuditLog `action='user.password_reset'` 1행 + User.passwordHash 새 값 (User 모델엔 passwordChangedAt 없으니 AuditLog timestamp 로 시점 확인)
+>    - 검증 SQL:
+>      ```bash
+>      PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms \
+>        -c "SELECT action, \"adminEmail\", reason, timestamp FROM \"AuditLog\" WHERE action='user.password_reset' OR action='USER_UPDATE' ORDER BY timestamp DESC LIMIT 5;"
+>      ```
+> 4. **(옵션) ADMIN 권한 게이트 회귀 테스트**:
+>    - 일반 ADMIN 계정 1개 생성 후 비번 재설정 시도 → 403 (SUPER_ADMIN 게이트 검증)
+>    - 미생성이면 본 PR 머지 단계에선 스킵 가능
+> 5. **`feature/per-user-sms-line` 브랜치 정리** (cleanup, 본 PR 머지 후):
+>    - 이 PR 이 라인 오버라이드의 최소 핵심만 흡수했으므로 옛 feature 브랜치는 더 이상 머지 대상이 아님
+>    - 실제 발송 경로 라인별 전환(`campaign-processor`, SMPP 워커 라인별 claim, `SmsLog.providerName` 박제)을 하려면 별도 새 브랜치로 재작성 권장
+>    - 옛 브랜치 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line` (사용자 판단 후)
+>
+> ### 본 PR 의 후속 작업(scope 외, 별도 PR)
+> - 발송 경로 라인별 전환 (Track A 의 진짜 동작 부분 재구현)
+> - 비번 재설정 시 유저 이메일/SMS 통보
+> - NextAuth 활성 세션 강제 종료(invalidate)
+> - 다른 admin 페이지의 `alert()` → `toast` 일괄 교체
+>
+> ### 본 PR 관련 핵심 파일 위치 (재개 시 빠른 참조)
+> - 설계 spec: `docs/superpowers/specs/2026-05-28-admin-dashboard-user-detail-refactor-design.md`
+> - 구현 plan: `docs/superpowers/plans/2026-05-28-admin-dashboard-user-detail-refactor.md`
+> - 함정 박제: PROGRESS.md §🟢 2026-05-28 관리자 대시보드 + 유저 상세 리팩토링 (바로 아래)
+>
+> ---
+
 > ## 🟢 2026-05-28 관리자 대시보드 + 유저 상세 리팩토링 (브랜치 `feat/admin-dashboard-and-user-detail-refactor`, 19 커밋)
 >
 > **변경**:
