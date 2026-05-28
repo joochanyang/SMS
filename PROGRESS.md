@@ -1,35 +1,142 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #6 머지·서버 admin+user 재배포 완료)
+> ## 🔴 다음 세션 재개 지점 (2026-05-29 05:30 KST · PR #6 머지·DB 마이그레이션·서버 재배포 완료, 출시 차단 요소 0)
 >
-> **재개 명령어**: `/clear` 후 "sms문자사이트 다음 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터
+> ### 🚀 재개 명령어 (한 줄로 다음 세션 시작)
+> ```
+> /clear
+> sms문자사이트 다음 작업 — PROGRESS.md "🔴 다음 세션 재개 지점" 부터
+> ```
 >
-> ### 본 세션 결과 (PR #6)
-> - ✅ **PR #6 squash 머지**: `226996c feat: 관리자 UI 아이디·텔레그램 ID 노출 + 건수 표기 + 한도 enforce 제거 (#6)` (2026-05-29 05:23 KST)
-> - ✅ **DB 마이그레이션 적용**: `20260529060000_add_user_telegram_id` (User.telegramId TEXT NULL + UNIQUE INDEX). `_prisma_migrations` 행 1건 finished_at 박힌 정상 상태로 INSERT 완료
-> - ✅ **admin + user 컨테이너 재빌드**: 둘 다 `Up (healthy)` + Next.js 16.2.3 Ready. `/login` 200 / user app 200
-> - ✅ **smpp-worker 영향 없음** (변경 파일 없음, 그대로 유지)
+> ### 📍 현재 좌표 (다음 세션이 바로 알아야 할 5가지)
+> | 항목 | 값 |
+> |---|---|
+> | 로컬 위치 | `/Users/mr.joo/Desktop/sms문자사이트` |
+> | 활성 브랜치 | `main` (clean, origin/main과 동기) |
+> | 최신 main HEAD | `4323f7c docs: PR #6 머지·DB 마이그레이션·서버 재배포 박제` |
+> | 서버 main HEAD | `4323f7c` (동기 완료) |
+> | 열린 PR | **없음** (PR #6 머지·정리 완료) |
+> | gh CLI 활성 계정 | `joochanyang` (폴더 진입 시 `.zshrc` chpwd hook 자동 전환) |
+> | GitHub repo | `joochanyang/SMS` (PRIVATE) |
 >
-> ### PR #6 변경 요약
-> - **UI**: 사용자 목록에서 이메일 컬럼 → 아이디(username)·텔레그램·이름·**남은 건수 (₩원화)** 패턴. 사용자 상세 빌링카드에서 한도 2칸 제거 후 남은건수·단가만. 프로필카드에 아이디·텔레그램 추가. 크레딧 원장 페이지 변동/잔여를 모두 건수 (₩원화) 패턴으로
-> - **DB**: `User.telegramId String? @unique` 신규 컬럼 추가 (마이그레이션)
-> - **API**: users GET/POST/PATCH가 username + telegramId 입출력. 이메일 마스킹 (`maskEmail`) 함수 제거. credits/ledger GET include에 user.{username,costPerMessage} 노출
-> - **발송 enforce 제거**: `app/api/sms/campaign/route.ts`에서 `dailySendLimit`/`maxCampaignSize` 게이트 블록 삭제. 이제 잔액 게이트만 유효 (`User.credits`)
-> - **모달**: UserEditModal에서 한도 입력 2칸 → 텔레그램 아이디 입력 1칸으로 교체. `userEmail`/`userName` props → `userLabel` 단순화
-> - **신규 헬퍼**: `admin/lib/credit-units.ts` — `creditsToCount(credits, cost) = floor(credits/cost)`, `formatCountWithKrw()`. 단가 ≤ 0 / NaN 이면 ₩원화만 폴백
+> ### ✅ 본 세션(2026-05-29 새벽)에서 끝낸 일
+> 1. PR #5 머지·배포 (campaign-processor + SMPP 워커 라인별 분기) — 서버 admin + smpp-worker 둘 다 재빌드, healthy
+> 2. PR #6 머지·배포 (관리자 UI 아이디·텔레그램·건수 표기·한도 enforce 제거) — 서버 admin + user 둘 다 재빌드, healthy
+>    - DB 마이그레이션 적용: `User.telegramId TEXT NULL + UNIQUE INDEX` (`20260529060000_add_user_telegram_id`)
+>    - 옛 `feature/per-user-sms-line` 브랜치 로컬+원격 삭제
 >
-> ### 함정 / 박제
-> - **enforce 제거의 의미**: dailySendLimit/maxCampaignSize 컬럼은 보존되지만 캠페인 발송 시 게이트로 동작하지 않음 (사용자가 "한도 있으면 변경 못 한다"로 명시적으로 요구함). 한도 정책을 다시 활성화하려면 `app/api/sms/campaign/route.ts`에 블록을 복원해야 함
-> - **회원가입 라우트 (`app/api/auth/register/route.ts`)**: 본 PR 범위 밖. 현재도 `username = email` 패턴이라 즉시 영향 없음. 새 가입 플로우(아이디·텔레그램만)는 별도 PR 필요 (사용자가 "이메일 가입 아예 없을 예정"이라고 명시했으므로 후속 작업 권장)
-> - **마이그레이션 적용 방법**: admin/user 컨테이너에 prisma CLI가 없어서 `docker compose run --rm sovereign-sms-admin npx prisma migrate deploy` 불가. → postgres 컨테이너(`sms-postgres`)에 직접 `ALTER TABLE` + `_prisma_migrations` 행 INSERT (checksum=migration.sql sha256). 다음 마이그레이션에도 같은 방식
-> - **건수 환산 공식**: `floor(credits / costPerMessage)`. 사용자별 단가가 다르면 행마다 단가가 다를 수 있어 credits/ledger API에 user.costPerMessage join 추가함. ledger row.user.costPerMessage 없으면 14 폴백
-> - **빌드 시 prisma generate**: admin/user Dockerfile이 빌드 단계에서 generate를 실행하는 듯 (telegramId 컬럼 사용 코드가 컨테이너 안에서도 동작). 명시적 단계 확인 안 했지만 healthy로 떴고 페이지 200이라 정상 작동
+> ### 🎯 다음 세션 작업 우선순위 (사용자 선택)
 >
-> ### 다음에 할 수 있는 일 (전부 선택)
-> 1. **라이브 검증** — chrome MCP로 admin 페이지 → 사용자 목록 / 상세 / 크레딧 원장 표시 확인. 텔레그램 아이디 입력 후 저장 → AuditLog 기록 확인
-> 2. **회원가입 플로우 재작성** — 이메일 가입 폐지, 아이디 + 비밀번호 + 텔레그램 아이디로 가입. `app/api/auth/register/route.ts` + `app/register/page.tsx` + lib/auth.ts 자격 증명 (별도 PR 권장)
-> 3. **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 이전 세션에서 박제한 의심 항목. 한도 정책 다시 도입하려면 검토
-> 4. **(옵션) PR #1 후속**: 비번 재설정 시 유저 이메일·SMS 통보 / NextAuth 활성 세션 강제 종료(invalidate) / 다른 admin 페이지의 `alert()` → `toast` 일괄 교체 / `recharts` npm uninstall
+> #### A순위 — 회원가입 플로우 정리 (작업량 ★ 중간, 사용자 의도 가장 명확)
+> 사용자가 본 세션에서 "이메일 가입 아예 없을 예정 + 텔레그램 아이디 추가"라고 명시. **확인 결과 회원가입은 이미 username 기반이고 이메일 입력 자체가 없음** (`app/api/auth/register/route.ts:27` 정규식 `/^[a-zA-Z0-9_]{3,30}$/` 가 이메일 형식 거부). 즉 **추가 필요 = "텔레그램 아이디 입력 칸 추가" 하나만** — 작업이 작음.
+>
+> 구체 작업:
+> - `app/api/auth/register/route.ts`: 본문 zod 스키마에 `telegramId: z.string().trim().min(1).optional()` 추가, 입력 시 중복 검사 (`prisma.user.findUnique({ where: { telegramId }})`), `User.create` data에 `...(telegramId && { telegramId })`
+> - `app/register/page.tsx`: 아이디·비번 사이에 텔레그램 아이디 input 추가, fetch body에 telegramId 포함, 409 에러 메시지 "이미 등록된 텔레그램 아이디입니다." 분기
+> - `__tests__/`: 회원가입 라우트 단위 테스트가 있으면 케이스 추가
+> - 머지 후: user 컨테이너만 재배포 (admin·smpp-worker 무관)
+>
+> 재개 명령어:
+> ```bash
+> cd /Users/mr.joo/Desktop/sms문자사이트
+> git checkout -b feat/register-telegram-id main
+> # 작업 후
+> pnpm tsc --noEmit && cd admin && pnpm tsc --noEmit && cd ..
+> pnpm test
+> ```
+>
+> #### B순위 — PR #6 라이브 검증 (작업량 ★ 작음, 위험 0)
+> chrome-devtools MCP로 admin 패널 라이브 검증. 다음 5단계:
+> 1. `http://5.161.112.248:3301/login` → `admin / Asdf!234` 로그인 (⚠️ 첫 로그인 후 변경 필수 — transcript 노출됨)
+> 2. 사용자 목록 → 아이디·텔레그램·남은건수 컬럼 표시 확인, 검색창에 "admin" 입력 → 필터링 동작
+> 3. 사용자 1명 클릭 → 프로필카드 아이디·텔레그램 표시, 빌링카드에서 "일일 발송 한도/최대 캠페인 크기" 칸이 **없는지** 확인, "남은 건수 (₩원화)" 표시 확인
+> 4. "수정" 버튼 → 모달에 텔레그램 아이디 input 표시. 값 입력 후 사유 5자+ 입력 → 저장 → AuditLog 기록 `USER_UPDATE` 확인 (감사 로그 페이지)
+> 5. 크레딧 원장 페이지 → 변동/잔여 컬럼이 "건수 (₩원화)" 패턴인지, "아이디" 컬럼이 username 표시인지
+>
+> #### C순위 — 잔여 잡정리 (선택, 출시와 무관)
+> - **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 본 세션에서 한도 enforce 제거했으므로 이 작업은 이제 의미 없음. **삭제 가능 항목**으로 분류
+> - **`recharts` npm uninstall** — 사용처 0, bundle size 절감. lock 갱신 필요
+> - **`@types/bcryptjs` / `@vitejs/plugin-react` 검증 후 제거 가능**
+> - **다른 admin 페이지의 `alert()` → `toast` 일괄 교체**
+> - **NextAuth 비번 재설정 시 활성 세션 강제 종료(invalidate)**
+> - **회원가입·비번 재설정 시 유저 이메일·SMS 통보** — 단 회원가입에서 이메일 자체가 안 받으니 SMS 통보만 의미 있음
+>
+> ### 🪤 영구 함정 (이 세션에서 새로 박제한 것)
+> 1. **DB 마이그레이션 적용 방법 (★ 다음 마이그레이션에도 그대로 적용)**
+>    admin/user 컨테이너에 prisma CLI 미설치 → `docker compose run --rm sovereign-sms-admin npx prisma migrate deploy` 안 됨. 우회:
+>    ```bash
+>    # 로컬에서 checksum 계산
+>    CHECKSUM=$(sha256sum prisma/migrations/<DIR>/migration.sql | cut -d' ' -f1)
+>    # 서버 postgres에 직접 적용 + _prisma_migrations 행 INSERT
+>    ssh root@5.161.112.248 "docker exec -i sms-postgres psql -U smsuser -d bulksms" <<SQL
+>    BEGIN;
+>    -- migration.sql 내용 복붙
+>    INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, finished_at, applied_steps_count)
+>    VALUES (gen_random_uuid(), '$CHECKSUM', '<MIGRATION_NAME>', NOW(), NOW(), 1);
+>    COMMIT;
+>    SQL
+>    ```
+> 2. **enforce 제거의 영구 의미**: `dailySendLimit`/`maxCampaignSize` 컬럼은 DB·prisma 스키마에 그대로 있지만 캠페인 발송 게이트로 작동하지 않음. 발송은 **잔액(`User.credits`)만** 게이트. 한도 정책을 다시 도입하려면 `app/api/sms/campaign/route.ts` 의 user select + if 블록을 복원해야 함 (커밋 `226996c` 의 -21 라인 부분이 원형)
+> 3. **건수 환산 공식**: `floor(credits / costPerMessage)`. 단가 ≤ 0 / NaN 이면 ₩원화만 표시. `admin/lib/credit-units.ts`에 박제
+> 4. **prisma client 캐시 문제 (LSP)**: 스키마 변경 직후 IDE/LSP는 옛 타입을 보고 에러 표시 — 실제 `pnpm tsc --noEmit` 은 통과. `pnpm prisma generate` 한 번 돌리면 즉시 해소. admin은 부모 `node_modules/.prisma/client` 를 bundler 해석으로 공유 (자체 client 없음)
+> 5. **사용자 상세 페이지 신규 admin 페이지 패턴 (PR #1 에서 박제, 재강조)**: `'use client' + <></>` fragment + Sidebar/Header 직접 렌더 금지 (AdminShell 공통 layout 패턴). `useAdminInfo()` 훅으로 admin role 읽기. 풀스크린 spinner 금지 — 인라인 skeleton 만
+>
+> ### 🛠 자주 쓰는 명령어 모음 (복붙용)
+>
+> **로컬 검증 풀세트**:
+> ```bash
+> cd /Users/mr.joo/Desktop/sms문자사이트
+> pnpm tsc --noEmit                    # 루트 0 에러 확인
+> cd admin && pnpm tsc --noEmit && cd ..  # admin 0 에러
+> pnpm lint                            # 0
+> pnpm test                            # 18 파일 / 213 테스트 베이스라인
+> ```
+>
+> **PR 머지 + 서버 배포 풀세트** (PR #6 때 실측 통과 절차):
+> ```bash
+> # 1) 로컬 PR 머지 + sync
+> gh pr merge <N> --squash --delete-branch --subject "<title> (#<N>)"
+> git fetch origin && git pull --ff-only
+>
+> # 2) 서버 진단 (untracked overwrite 함정 점검)
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && git fetch origin && git status --short && git log --oneline -2'
+>
+> # 3) 발송 중 행 점검 (라우팅·발송 경로 변경 시 필수)
+> ssh root@5.161.112.248 "docker exec sms-postgres psql -U smsuser -d bulksms -c \"SELECT status, COUNT(*) FROM \\\"SmsLog\\\" WHERE status IN ('PENDING','RETRY_PENDING','CLAIMED','PROCESSING') GROUP BY status;\""
+>
+> # 4) 서버 pull (마이그레이션 있으면 위 함정 #1 방식으로 먼저 적용)
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && git pull --ff-only'
+>
+> # 5) 영향받는 컨테이너만 재빌드 (선별)
+> #    - 발송 경로 변경 → admin+user+smpp-worker
+> #    - admin UI/API 만 → admin
+> #    - 회원가입/유저 발송 경로 → user
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && docker compose up -d --build sovereign-sms-admin sovereign-sms-user'
+>
+> # 6) 헬스체크
+> ssh root@5.161.112.248 'cd /opt/sovereign-sms && docker compose ps && docker compose logs --tail=10 sovereign-sms-admin'
+> curl -sS -o /dev/null -w "/login HTTP=%{http_code}\n" http://5.161.112.248:3301/login          # 200
+> curl -sS -o /dev/null -w "/api/auth/session HTTP=%{http_code}\n" http://5.161.112.248:3301/api/auth/session  # 401
+> curl -sS -o /dev/null -w "user HTTP=%{http_code}\n" http://5.161.112.248:3300/                # 200
+> ```
+>
+> **DB 접속**:
+> ```bash
+> # 직접 쿼리
+> ssh root@5.161.112.248 "docker exec sms-postgres psql -U smsuser -d bulksms"
+> # 한 줄 쿼리 (single-quote 안에 SQL)
+> ssh root@5.161.112.248 "docker exec sms-postgres psql -U smsuser -d bulksms -c \"SELECT ...;\""
+> ```
+>
+> **서비스 위치**:
+> - 서버: `5.161.112.248`, SSH key: 기본 (root@)
+> - 서버 코드 경로: `/opt/sovereign-sms`
+> - DB 컨테이너: `sms-postgres` (host:port `5.161.112.248:5434`)
+> - DB 자격: `smsuser` / `smspass_prod_2026` / `bulksms`
+> - admin URL: `http://5.161.112.248:3301`
+> - user URL: `http://5.161.112.248:3300`
+> - admin 로그인: `admin` / `Asdf!234` (⚠️ transcript 노출 — 첫 로그인 후 변경 필수)
+> - 컨테이너 3개: `sovereign-sms-admin`, `sovereign-sms-user`, `sovereign-sms-smpp-worker`
 >
 > ---
 >
