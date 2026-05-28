@@ -114,18 +114,18 @@ app/dashboard/address-book/[id]/import-contacts.ts:
 ### 🟡 P2-3. 루트의 옛 plan/research 문서 (9개)
 
 ```
-admin-implementation-plan.md       (40 KB, 2026-04-09)
-admin-panel-research.md            (23 KB, 2026-04-09)
-implementation_plan.md             (5 KB, 2026-04-09)
-plan.md                            (19 KB, 2026-04-09)
-research.md                        (25 KB, 2026-04-09)
-MULTI-PROVIDER-PLAN.md             (5 KB, 2026-04-14)
-PLAN-2026-04-17-substitution-and-speed.md (16 KB)
-PLAN-2026-04-27-smpp-migration.md  (19 KB)
-smpp.md                            (191 B)
+docs/archive/admin-implementation-plan.md       (40 KB, 2026-04-09)
+docs/archive/admin-panel-research.md            (23 KB, 2026-04-09)
+docs/archive/implementation_plan.md             (5 KB, 2026-04-09)
+docs/archive/plan.md                            (19 KB, 2026-04-09)
+docs/archive/research.md                        (25 KB, 2026-04-09)
+docs/archive/MULTI-PROVIDER-PLAN.md             (5 KB, 2026-04-14)
+docs/archive/PLAN-2026-04-17-substitution-and-speed.md (16 KB)
+docs/archive/PLAN-2026-04-27-smpp-migration.md  (19 KB)
+docs/archive/smpp.md                            (191 B)
 ```
 
-옛 작업 산출물. 보존 가치는 있지만 루트에 흩어져 있음. **조치**: `docs/archive/` 로 이동.
+옛 작업 산출물. 보존 가치는 있지만 루트에 흩어져 있어 2026-05-29 `docs/archive/` 로 이동 완료.
 
 ### 🟡 P2-4. 로컬 stale 브랜치 5개
 
