@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@shared/prisma';
 import { requireAuth } from '@/lib/admin-session';
-import { requirePermission } from '@/lib/rbac';
+import { requirePermission, requireRole } from '@/lib/rbac';
 import { requireSudo } from '@/lib/sudo';
 import { logAdminAction } from '@/lib/audit';
 import { handleApiError } from '@shared/api-error';
@@ -23,6 +23,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   try {
     const admin = await requireAuth(req);
     requirePermission(admin, 'user:update');
+    // SUPER_ADMIN 전용 — 일반 ADMIN 은 user:update 권한이 있어도 비밀번호 재설정은 불가.
+    // 자매 PATCH 라우트의 costPerMessage/smsProvider 게이트와 동일 패턴 (spec §4.5).
+    requireRole(admin, 'SUPER_ADMIN');
     await requireSudo(req, admin);
 
     const { id } = await context.params;
