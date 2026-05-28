@@ -1,6 +1,39 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #5 머지·서버 admin+smpp-worker 재배포 완료)
+> ## 🔴 다음 세션 재개 지점 (2026-05-29 PR #6 머지·서버 admin+user 재배포 완료)
+>
+> **재개 명령어**: `/clear` 후 "sms문자사이트 다음 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터
+>
+> ### 본 세션 결과 (PR #6)
+> - ✅ **PR #6 squash 머지**: `226996c feat: 관리자 UI 아이디·텔레그램 ID 노출 + 건수 표기 + 한도 enforce 제거 (#6)` (2026-05-29 05:23 KST)
+> - ✅ **DB 마이그레이션 적용**: `20260529060000_add_user_telegram_id` (User.telegramId TEXT NULL + UNIQUE INDEX). `_prisma_migrations` 행 1건 finished_at 박힌 정상 상태로 INSERT 완료
+> - ✅ **admin + user 컨테이너 재빌드**: 둘 다 `Up (healthy)` + Next.js 16.2.3 Ready. `/login` 200 / user app 200
+> - ✅ **smpp-worker 영향 없음** (변경 파일 없음, 그대로 유지)
+>
+> ### PR #6 변경 요약
+> - **UI**: 사용자 목록에서 이메일 컬럼 → 아이디(username)·텔레그램·이름·**남은 건수 (₩원화)** 패턴. 사용자 상세 빌링카드에서 한도 2칸 제거 후 남은건수·단가만. 프로필카드에 아이디·텔레그램 추가. 크레딧 원장 페이지 변동/잔여를 모두 건수 (₩원화) 패턴으로
+> - **DB**: `User.telegramId String? @unique` 신규 컬럼 추가 (마이그레이션)
+> - **API**: users GET/POST/PATCH가 username + telegramId 입출력. 이메일 마스킹 (`maskEmail`) 함수 제거. credits/ledger GET include에 user.{username,costPerMessage} 노출
+> - **발송 enforce 제거**: `app/api/sms/campaign/route.ts`에서 `dailySendLimit`/`maxCampaignSize` 게이트 블록 삭제. 이제 잔액 게이트만 유효 (`User.credits`)
+> - **모달**: UserEditModal에서 한도 입력 2칸 → 텔레그램 아이디 입력 1칸으로 교체. `userEmail`/`userName` props → `userLabel` 단순화
+> - **신규 헬퍼**: `admin/lib/credit-units.ts` — `creditsToCount(credits, cost) = floor(credits/cost)`, `formatCountWithKrw()`. 단가 ≤ 0 / NaN 이면 ₩원화만 폴백
+>
+> ### 함정 / 박제
+> - **enforce 제거의 의미**: dailySendLimit/maxCampaignSize 컬럼은 보존되지만 캠페인 발송 시 게이트로 동작하지 않음 (사용자가 "한도 있으면 변경 못 한다"로 명시적으로 요구함). 한도 정책을 다시 활성화하려면 `app/api/sms/campaign/route.ts`에 블록을 복원해야 함
+> - **회원가입 라우트 (`app/api/auth/register/route.ts`)**: 본 PR 범위 밖. 현재도 `username = email` 패턴이라 즉시 영향 없음. 새 가입 플로우(아이디·텔레그램만)는 별도 PR 필요 (사용자가 "이메일 가입 아예 없을 예정"이라고 명시했으므로 후속 작업 권장)
+> - **마이그레이션 적용 방법**: admin/user 컨테이너에 prisma CLI가 없어서 `docker compose run --rm sovereign-sms-admin npx prisma migrate deploy` 불가. → postgres 컨테이너(`sms-postgres`)에 직접 `ALTER TABLE` + `_prisma_migrations` 행 INSERT (checksum=migration.sql sha256). 다음 마이그레이션에도 같은 방식
+> - **건수 환산 공식**: `floor(credits / costPerMessage)`. 사용자별 단가가 다르면 행마다 단가가 다를 수 있어 credits/ledger API에 user.costPerMessage join 추가함. ledger row.user.costPerMessage 없으면 14 폴백
+> - **빌드 시 prisma generate**: admin/user Dockerfile이 빌드 단계에서 generate를 실행하는 듯 (telegramId 컬럼 사용 코드가 컨테이너 안에서도 동작). 명시적 단계 확인 안 했지만 healthy로 떴고 페이지 200이라 정상 작동
+>
+> ### 다음에 할 수 있는 일 (전부 선택)
+> 1. **라이브 검증** — chrome MCP로 admin 페이지 → 사용자 목록 / 상세 / 크레딧 원장 표시 확인. 텔레그램 아이디 입력 후 저장 → AuditLog 기록 확인
+> 2. **회원가입 플로우 재작성** — 이메일 가입 폐지, 아이디 + 비밀번호 + 텔레그램 아이디로 가입. `app/api/auth/register/route.ts` + `app/register/page.tsx` + lib/auth.ts 자격 증명 (별도 PR 권장)
+> 3. **CreditAdjustModal `dailyCreditLimit`/`usedToday` props 전달** — 이전 세션에서 박제한 의심 항목. 한도 정책 다시 도입하려면 검토
+> 4. **(옵션) PR #1 후속**: 비번 재설정 시 유저 이메일·SMS 통보 / NextAuth 활성 세션 강제 종료(invalidate) / 다른 admin 페이지의 `alert()` → `toast` 일괄 교체 / `recharts` npm uninstall
+>
+> ---
+>
+> ## 🟢 2026-05-29 PR #5 머지·서버 배포 (이전 세션, 보존)
 >
 > **재개 명령어**: `/clear` 후 "sms문자사이트 다음 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터
 >
