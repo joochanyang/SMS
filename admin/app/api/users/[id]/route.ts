@@ -16,6 +16,7 @@ import type { Prisma } from '@prisma/client';
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   costPerMessage: z.number().positive('건당 단가는 0보다 커야 합니다.').optional(),
+  smsProvider: z.enum(['infobip', 'smsto', 'txg']).nullable().optional(),
   dailySendLimit: z.number().int().min(0).optional(),
   maxCampaignSize: z.number().int().min(0).optional(),
   reason: z.string().min(5, '사유를 5자 이상 입력하세요.').optional(),
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         suspendedAt: true,
         suspendReason: true,
         costPerMessage: true,
+        smsProvider: true,
         dailySendLimit: true,
         maxCampaignSize: true,
         failedLoginCount: true,
@@ -101,12 +103,19 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       );
     }
 
-    const { name, costPerMessage, dailySendLimit, maxCampaignSize, reason } = parsed.data;
+    const { name, costPerMessage, smsProvider, dailySendLimit, maxCampaignSize, reason } = parsed.data;
     if (costPerMessage !== undefined) {
       requireRole(admin, 'SUPER_ADMIN');
       await requireSudo(req, admin);
       if (!reason) {
         return NextResponse.json({ error: '건당 단가 변경 사유를 입력하세요.' }, { status: 400 });
+      }
+    }
+    if (smsProvider !== undefined) {
+      requireRole(admin, 'SUPER_ADMIN');
+      await requireSudo(req, admin);
+      if (!reason) {
+        return NextResponse.json({ error: '발송 라인 변경 사유를 입력하세요.' }, { status: 400 });
       }
     }
 
@@ -124,6 +133,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (costPerMessage !== undefined) {
       updateData.costPerMessage = costPerMessage;
       auditNewValue.costPerMessage = costPerMessage;
+    }
+    if (smsProvider !== undefined) {
+      updateData.smsProvider = smsProvider; // null 이면 전역 기본으로 복귀
+      auditNewValue.smsProvider = smsProvider ?? '전역 기본';
     }
     if (dailySendLimit !== undefined) {
       updateData.dailySendLimit = dailySendLimit;
@@ -147,6 +160,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         name: true,
         credits: true,
         costPerMessage: true,
+        smsProvider: true,
         status: true,
         dailySendLimit: true,
         maxCampaignSize: true,
@@ -158,6 +172,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       previousValue: {
         name: current.name,
         costPerMessage: Number(current.costPerMessage),
+        smsProvider: current.smsProvider ?? '전역 기본',
         dailySendLimit: current.dailySendLimit,
         maxCampaignSize: current.maxCampaignSize,
       },
