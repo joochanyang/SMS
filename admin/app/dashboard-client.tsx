@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Send,
@@ -183,11 +183,19 @@ export default function DashboardClient() {
     }
   }, [router]);
 
+  // React 19 useEffectEvent — fetchData를 effect 의존성에서 분리.
+  // 효과는 마운트 시 1회만 실행되어 interval만 설정하고, 매 tick마다
+  // 최신 onPoll(=fetchData) 클로저를 호출한다. fetchData 안의 setState들은
+  // async/await 이후 실행되므로 effect에 동기적 setState가 남지 않는다.
+  const onPoll = useEffectEvent(() => {
+    void fetchData();
+  });
+
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
+    onPoll();
+    const interval = setInterval(() => onPoll(), 30000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, []);
 
   // 풀스크린 spinner 제거 — AdminShell의 Sidebar/Header는 layout에서 계속 보이고,
   // 본문은 stats가 null일 때 0/대시값으로 즉시 렌더되므로 깜빡임 없음.
