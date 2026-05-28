@@ -184,7 +184,7 @@ UI:
 1. 양식 작성 + "재설정" 버튼 클릭
 2. 클라 검증: 8자+, 영문+숫자 1개씩, 일치 확인, 사유 10자+
 3. confirm modal: "정말로 이 유저의 비밀번호를 재설정합니까? 유저는 다음 로그인 시 새 비밀번호를 사용해야 합니다."
-4. POST `/api/users/[id]/password` { newPassword, reason, idempotencyKey } + sudo 헤더
+4. POST `/api/users/[id]/password` { newPassword, confirmPassword, reason } + sudo 헤더
 5. 응답 처리:
    - 200 → toast "비밀번호가 재설정되었습니다." + 폼 리셋
    - 403 + requireSudo → sudo modal → 재시도
@@ -201,24 +201,29 @@ POST /api/users/[id]/password
 ```ts
 {
   newPassword: string;     // 8+ 영+숫
+  confirmPassword: string; // newPassword와 일치 확인 (서버에서도 재검증)
   reason: string;          // 10+
-  idempotencyKey: string;  // UUID
 }
 ```
 
 처리:
-1. `requireAuth` + `requirePermission(admin, 'user:update')`
-2. **sudo 재인증 필수** — `requireSudo(admin, request)`. 미인증 시 `{ error, requireSudo: true }` + 403.
-3. 입력 검증:
-   - `newPassword.length >= 8`
-   - `/[a-zA-Z]/.test(newPassword) && /[0-9]/.test(newPassword)` (기존 reset-password와 동일 규칙)
-   - `reason.length >= 10`
-4. Idempotency: 동일 `idempotencyKey` + 동일 `userId` + action=`user.password_reset` 인 `AuditLog` 가 최근 1시간 내 존재하면 200 반환(중복 방지). 별도 테이블 신설 안 함 — AuditLog.metadata.idempotencyKey 로만 추적. 조회 인덱스 부담은 1시간 + admin 액션 수 적으므로 무시.
-5. `bcryptjs.hash(newPassword, 12)` (기존 register/reset과 동일 cost)
-6. `prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date() }})`
-7. (옵션) 유저의 모든 활성 NextAuth 세션 무효화 — 현재 NextAuth 세션 무효화 메커니즘 확인 필요. 미구현 시 다음 로그인 시 자동 갱신되므로 본 PR scope 외.
-8. `logAdminAction({ action: 'user.password_reset', resourceType: 'User', resourceId: userId, metadata: { reason, idempotencyKey }})` — **비밀번호 자체는 절대 로그에 남기지 않음**
-9. 200 응답 `{ ok: true }`
+1. `requireAuth(req)` → admin
+2. `requirePermission(admin, 'user:update')`
+3. **sudo 재인증 필수** — `await requireSudo(req, admin)`. 미인증 시 helper가 `SudoError` throw → catch에서 `{ error: '...', requireSudo: true }` + 403 반환. (기존 `admin/app/api/users/[id]/route.ts` PATCH 와 동일 패턴)
+4. 입력 검증 (zod):
+   - `newPassword`: `z.string().min(8).regex(/[a-zA-Z]/).regex(/[0-9]/)`
+   - `confirmPassword === newPassword`
+   - `reason: z.string().min(10)`
+5. `bcryptjs.hash(newPassword, 12)` — 유저(NextAuth)는 bcryptjs 사용 (admin은 argon2id, 다름. 절대 혼동 금지)
+6. `prisma.user.update({ where: { id }, data: { passwordHash, passwordChangedAt: new Date() }})`
+7. `logAdminAction(admin, 'user.password_reset', 'User', userId, reason, req, { result: 'SUCCESS' })` — **metadata에 비밀번호 평문/해시 절대 금지**. previousValue/newValue 도 비움.
+8. 200 응답 `{ ok: true }`
+
+Idempotency는 두지 않는다 (YAGNI). 이유:
+- sudo 게이트(5분 만료) + confirm modal + 클라이언트 측 loading 상태 가드로 더블 클릭 방지 충분
+- 비밀번호 재설정은 저빈도 액션
+- 동일 비번을 두 번 hash해도 결과는 동일 결과(`passwordChangedAt`만 두 번 bump — 무해)
+- AuditLog는 두 줄 남지만 감사 측면에선 오히려 추적성 ↑
 
 권한 RBAC:
 - 기존 `user:update` 권한 재사용. 별도 권한 `user:reset_password` 신설하지 않음 (이미 sudo + RBAC 이중 게이트).
@@ -303,7 +308,8 @@ POST /api/users/[id]/password
 - **비밀번호 hash cost 12 고정** — 기존 코드와 동일. 너무 낮추거나 높이면 안 됨.
 - **AuditLog metadata에 비밀번호 평문/해시 절대 금지**. metadata 직렬화 전 자동 redact 가드 없음 — 호출부에서 보장.
 - **CSRF/Origin 화이트리스트**: 신규 POST 라우트도 `proxy.ts`의 `ADMIN_ALLOWED_ORIGINS` 화이트리스트 통과해야 함. 변경 불필요 — 기존 라우트와 동일 path 패턴.
-- **idempotencyKey 충돌**: 같은 idempotencyKey로 다른 newPassword 보내면 어떻게 처리? → 1회 처리된 키는 그대로 200 반환(첫 요청 result 캐시). hash 재계산 안 함. 호출부 책임.
+- **bcryptjs vs argon2id 혼동 금지**: 유저(`User.passwordHash`)는 **bcryptjs cost 12** 고정. 관리자(`AdminUser.passwordHash`)는 **argon2id**. 본 spec은 유저 비번 재설정만 다루므로 bcryptjs만 사용.
+- **requireSudo 시그니처는 `(req, admin)`** — 인자 순서 주의. 잘못 호출 시 TS 컴파일러가 잡지만 런타임 의미가 깨지면 안 됨.
 
 ## 7. 마이그레이션 / 배포
 
