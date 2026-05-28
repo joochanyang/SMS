@@ -51,7 +51,6 @@ export default function SmsProvidersPage() {
   const admin = useAdminInfo();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [killSwitch, setKillSwitch] = useState(false);
 
   // 연결 테스트 상태
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
@@ -76,17 +75,13 @@ export default function SmsProvidersPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // killSwitch는 settings 페이지처럼 화면 표시에 필요해서 session 호출 유지
+      // 세션 만료(401) 감지로 로그인 리다이렉트하기 위해 session 호출 유지
       const [sessionRes, providersRes] = await Promise.all([
         fetch('/api/auth/session'),
         fetch('/api/sms-providers'),
       ]);
 
       if (sessionRes.status === 401) { router.push('/login'); return; }
-      if (sessionRes.ok) {
-        const sessionData = await sessionRes.json();
-        setKillSwitch(sessionData.killSwitch ?? false);
-      }
 
       if (providersRes.ok) {
         const data = await providersRes.json();

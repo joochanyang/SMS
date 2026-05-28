@@ -1,38 +1,38 @@
 # SMS 문자사이트 (SovereignSMS) 작업 진행 현황
 
-> ## 🔴 다음 세션 재개 지점 (2026-05-28 PR #1 생성 후, 사용자 액션 대기)
+> ## 🔴 다음 세션 재개 지점 (2026-05-28 PR #1 squash 머지 완료, 서버 재배포 진행 중)
 >
-> **PR**: https://github.com/joochanyang/SMS/pull/1 — `feat/admin-dashboard-and-user-detail-refactor` → `main`, 19 커밋, +1336/-129
+> **PR**: https://github.com/joochanyang/SMS/pull/1 — squash 머지됨 (`5840974`), 2026-05-28 06:38:44 UTC. main 동기화 + 원격/로컬 feat 브랜치 삭제 완료.
 >
 > **재개 명령어**: `/clear` 후 "sms문자사이트 관리자 리팩토링 이어서 작업" → 이 PROGRESS.md `🔴 다음 세션 재개 지점` 섹션부터 진행
 >
+> ### 진행 상태
+> - ✅ **PR #1 squash 머지**: `5840974 feat(admin): dashboard provider balance + user detail 4-card refactor (#1)`
+> - ✅ **로컬 main 동기화**: `git reset --hard origin/main` (충돌 원인 = 로컬에 직접 커밋했던 spec/plan 4건이 squash로 압축되어 충돌, 내용은 squash에 포함되어 손실 0)
+> - ✅ **원격 + 로컬 `feat/admin-dashboard-and-user-detail-refactor` 삭제 완료**
+> - ✅ **서버 git pull 완료**: `/opt/sovereign-sms` HEAD = `5840974`
+> - ✅ **admin 컨테이너 빌드 + 재시작 완료**: `Up (healthy)`, `Next.js 16.2.3 ✓ Ready` (2026-05-28 15:43 KST)
+> - ✅ **DB 검증**: `_prisma_migrations` 에 `20260528120000_add_user_sms_provider` 적용됨, `User.smsProvider TEXT NULL` 컬럼 존재
+> - ⬜ **운영 라이브 검증 대기** (사용자 액션)
+>
 > ### 우선순위 순서대로 진행할 일
-> 1. **PR #1 리뷰 + 머지** (사용자 액션):
->    - https://github.com/joochanyang/SMS/pull/1 에서 코드 확인 → Approve & Merge
->    - 머지 충돌은 없을 것 (main 기준 19 커밋 직선)
-> 2. **서버 재배포** — Hetzner `/opt/sovereign-sms`:
->    ```bash
->    ssh root@5.161.112.248 'cd /opt/sovereign-sms && git pull origin main && docker compose up -d --build sovereign-sms-admin'
->    ```
->    - `prisma migrate deploy` 가 자동 실행되더라도 `Database schema is up to date` 반환 (이미 마킹됨)
->    - 다른 컨테이너(SMPP 워커, nginx) 재배포 불필요
-> 3. **운영 라이브 검증** — admin 패널 https://5.161.112.248:3301 (또는 운영 도메인):
+> 1. **운영 라이브 검증** — admin 패널 https://5.161.112.248:3301 (또는 운영 도메인):
 >    - 로그인 → 대시보드 → 프로바이더 잔액 카드 보이는지
 >    - 사용자 관리 → 임의 유저 → 4 카드 표시 + 사이드바 1개
->    - 라우팅 카드 드롭다운 변경 → sudo 모달 → 사유 입력 → 변경 적용 → AuditLog `action='user.smsProvider_update'` 또는 `USER_UPDATE` 확인
+>    - 라우팅 카드 드롭다운 변경 → sudo 모달 → 사유 입력 → 변경 적용 → AuditLog `action='USER_UPDATE'` 확인
 >    - 보안 카드: 임의 유저 비밀번호 재설정 → sudo → AuditLog `action='user.password_reset'` 1행 + User.passwordHash 새 값 (User 모델엔 passwordChangedAt 없으니 AuditLog timestamp 로 시점 확인)
 >    - 검증 SQL:
 >      ```bash
 >      PGPASSWORD='smspass_prod_2026' psql -h 5.161.112.248 -p 5434 -U smsuser -d bulksms \
 >        -c "SELECT action, \"adminEmail\", reason, timestamp FROM \"AuditLog\" WHERE action='user.password_reset' OR action='USER_UPDATE' ORDER BY timestamp DESC LIMIT 5;"
 >      ```
-> 4. **(옵션) ADMIN 권한 게이트 회귀 테스트**:
+> 2. **(옵션) ADMIN 권한 게이트 회귀 테스트**:
 >    - 일반 ADMIN 계정 1개 생성 후 비번 재설정 시도 → 403 (SUPER_ADMIN 게이트 검증)
->    - 미생성이면 본 PR 머지 단계에선 스킵 가능
-> 5. **`feature/per-user-sms-line` 브랜치 정리** (cleanup, 본 PR 머지 후):
->    - 이 PR 이 라인 오버라이드의 최소 핵심만 흡수했으므로 옛 feature 브랜치는 더 이상 머지 대상이 아님
+>    - 미생성이면 스킵 가능
+> 3. **`feature/per-user-sms-line` 브랜치 정리** (선택, 본 PR과 독립):
+>    - 본 PR 이 라인 오버라이드의 최소 핵심만 흡수했으므로 옛 feature 브랜치는 더 이상 머지 대상이 아님
 >    - 실제 발송 경로 라인별 전환(`campaign-processor`, SMPP 워커 라인별 claim, `SmsLog.providerName` 박제)을 하려면 별도 새 브랜치로 재작성 권장
->    - 옛 브랜치 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line` (사용자 판단 후)
+>    - 정리 명령: `git branch -D feature/per-user-sms-line && git push origin --delete feature/per-user-sms-line`
 >
 > ### 본 PR 의 후속 작업(scope 외, 별도 PR)
 > - 발송 경로 라인별 전환 (Track A 의 진짜 동작 부분 재구현)
@@ -77,8 +77,36 @@
 >
 > **배포**: PR 머지 후 admin 컨테이너 재배포만 필요 (`docker compose up -d --build sovereign-sms-admin`). DB 마이그레이션은 이미 적용된 상태(prisma migrate resolve 로 마킹). 서버 재배포 시 `migrate deploy` 호출되더라도 `Database schema is up to date` 반환됨.
 >
-> **재개**: PR 생성 후 사용자 액션 — 코드 리뷰 + 머지 + 서버 재배포 + 라이브 검증.
+> **머지 상태 (2026-05-28 15:38 KST)**: squash 머지 완료 (`5840974`). 원격/로컬 feat 브랜치 삭제 완료. 서버 git pull 완료. admin 컨테이너 빌드+재시작 진행 중 → 완료 후 라이브 검증.
 
+> ## 🟢 2026-05-28 출시 전 안전 클린업 (브랜치 `chore/prelaunch-cleanup`)
+>
+> **목표**: 발송·결제·인증 핵심 경로는 일절 안 건드리고 안전한 정리만.
+>
+> **감사 보고서**: `docs/2026-05-28-prelaunch-code-audit.md` (P0~P3 분류 + knip 거짓양성 검증 포함)
+>
+> **변경**:
+> - 🔴 P0-1 **`.env.bak-1777043844`, `.env.bak-1777043904` 삭제** (루트 평문 키 백업 2개. git에는 없었지만 디스크에서 제거)
+> - 🟠 P1-1 **logger.test.ts**: Node 22+ `NODE_ENV` readonly 호환 (`process.env.X = ...` / `delete` → `vi.stubEnv` / `vi.unstubAllEnvs`)
+> - 🟠 P1-1 **루트 tsconfig.json**: `@shared/*` path alias 추가 (`__tests__/api/admin-provider-balances.test.ts` 가 admin mapper import 하느라 루트 tsc 가 mapper 따라가서 별칭 못 풀던 에러 fix)
+> - 🟠 P1-3 **`admin/components/tps-chart.tsx` 삭제** (PR #1에서 대시보드에서 제거됐는데 파일은 남아 있던 dead code)
+> - 🟠 P1-4 **`admin/app/sms-providers/page.tsx` killSwitch state 제거** (set만 하고 어디서도 읽지 않던 unused state. session 401 리다이렉트 효과는 그대로 유지)
+>
+> **회귀 검증**:
+> - 루트 `tsc --noEmit`: 에러 4 → **0**
+> - admin `tsc --noEmit`: **0** 유지
+> - ESLint: warning 1 → **0** (남은 에러 1건 `dashboard-client.tsx:187` set-state-in-effect 는 의도적 보류 — 동작 정상이라 출시 후 별도 처리)
+> - vitest: **198/198** 유지 (베이스라인 동일)
+>
+> **의도적으로 건드리지 않은 것**:
+> - 큰 파일 4개(`users/[id]/page.tsx` 630줄, `sms-send/page.tsx` 726줄 등) — 라이브 회귀 위험이 커 출시 후 별도 PR
+> - `dashboard-client.tsx` useEffect setState 경고 — 동작 정상이라 보류
+> - 의존성 정리(`recharts`, `@types/bcryptjs`, `@vitejs/plugin-react`) — `package.json` 수정은 lock 갱신 필요해 출시 후 별도 PR
+> - 옛 plan 문서 9개 `docs/archive/` 이동 — 출시와 무관
+> - 로컬 stale 브랜치 5개 / `_prisma_migrations` 중복 row 1건 — 출시와 무관
+>
+> ---
+>
 > ## 📦 저장소 이전 (2026-05-28)
 > **새 저장소**: `joochanyang/SMS` (https://github.com/joochanyang/SMS)
 > **옛 저장소**: `joocy75-hash/infosms` — 더 이상 push 안 함, 그대로 보존

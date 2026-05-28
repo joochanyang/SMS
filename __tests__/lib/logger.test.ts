@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // 환경변수와 모듈 캐시를 초기화하기 위해 동적 import 사용
+// NODE_ENV 는 Node 22+ 에서 readonly 라 vi.stubEnv 로 우회 (afterEach 의 vi.unstubAllEnvs 가 정리)
 async function getLogger(logLevel?: string, nodeEnv?: string) {
-  if (logLevel !== undefined) process.env.LOG_LEVEL = logLevel;
-  else delete process.env.LOG_LEVEL;
+  if (logLevel !== undefined) vi.stubEnv('LOG_LEVEL', logLevel);
+  else vi.stubEnv('LOG_LEVEL', '');
 
-  if (nodeEnv !== undefined) process.env.NODE_ENV = nodeEnv;
-  else delete process.env.NODE_ENV;
+  if (nodeEnv !== undefined) vi.stubEnv('NODE_ENV', nodeEnv);
+  else vi.stubEnv('NODE_ENV', '');
 
   // 모듈 캐시 제거 후 재import
   const mod = await import('../../lib/logger');
@@ -26,8 +27,7 @@ describe('logger', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.LOG_LEVEL;
-    delete process.env.NODE_ENV;
+    vi.unstubAllEnvs();
   });
 
   it('info 호출 시 console.log를 사용한다', async () => {
