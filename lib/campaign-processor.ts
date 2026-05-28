@@ -4,7 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { logger, toLogError } from "@/lib/logger";
-import { getActiveProvider } from "@/lib/sms-providers/router";
+import { resolveSendingProvider } from "@/lib/sms-providers/router";
 import {
   getRetryDelayMs,
   isTemporaryProviderError,
@@ -14,6 +14,14 @@ import {
 import { generateSenderId } from "@/lib/sender-id";
 
 const MIN_DYNAMIC_BATCH_SIZE = 20;
+
+/**
+ * 캠페인의 발송 라인이 txg면 SMPP 워커가 처리하므로 Next.js는 위임(skip)한다.
+ * txg가 아니면(infobip/smsto/null) Next.js가 직접 발송한다.
+ */
+export function shouldDelegateToWorker(providerName: string | null): boolean {
+  return providerName === "txg";
+}
 
 function clampInt(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.floor(value)));
@@ -88,13 +96,17 @@ export async function processCampaignBatch(
     });
   }
 
-  // 활성 프로바이더를 먼저 로드하여 배치 상한의 기준값으로 사용한다.
-  const provider = await getActiveProvider();
+  // 이 캠페인의 발송 라인을 행 providerName에서 읽는다 (발송 전 박제됨).
+  // 박제 안 된 레거시 행 대비: PENDING/RETRY_PENDING 중 첫 행 기준, 없으면 전역 폴백.
+  const lineSample = await prisma.smsLog.findFirst({
+    where: { campaignId, status: { in: ["PENDING", "RETRY_PENDING"] } },
+    select: { providerName: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const campaignLine = lineSample?.providerName ?? null;
 
-  // TXG는 SMPP 워커(services/smpp-worker)가 단독 처리한다.
-  // Next.js 측에서 직접 sendBatch 호출 시 TxgSendBatchUnsupportedError 가 발생하므로
-  // 여기서 fail-closed로 분기 — 워커가 PENDING 행을 폴링하여 비동기 처리할 것.
-  if (provider.name === "txg") {
+  // txg 캠페인은 SMPP 워커(services/smpp-worker)가 단독 처리 → Next.js는 위임.
+  if (shouldDelegateToWorker(campaignLine)) {
     const remaining = await prisma.smsLog.count({
       where: {
         campaignId,
@@ -107,6 +119,9 @@ export async function processCampaignBatch(
       status: campaign.status,
     };
   }
+
+  // 비-txg 라인: 이 캠페인의 라인으로 발송. 미설정/레거시/전역txg는 router가 안전 폴백.
+  const provider = await resolveSendingProvider(campaignLine);
 
   const providerMaxBatch = Math.max(1, provider.maxBatchSize);
 
@@ -140,6 +155,7 @@ export async function processCampaignBatch(
   >`WITH claimed AS (
        SELECT id FROM "SmsLog"
        WHERE "campaignId" = ${campaignId}
+         AND ("providerName" IS NULL OR "providerName" <> 'txg')
          AND (status = 'PENDING' OR (status = 'RETRY_PENDING' AND "nextRetryAt" <= ${now}))
        ORDER BY "createdAt" ASC
        LIMIT ${effectiveBatchSize}

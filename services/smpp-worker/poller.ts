@@ -1,9 +1,11 @@
 // ---------------------------------------------------------------------------
-// SmsLog 폴러 — TXG 활성일 때 PENDING/RETRY_PENDING 행을 claim 후 SMPP 송신
+// SmsLog 폴러 — providerName='txg' 행을 claim 후 SMPP 송신
 // ---------------------------------------------------------------------------
 //
 // 기존 lib/campaign-processor.ts의 안전 가드를 그대로 미러링한다:
-//   - getActiveProvider() == 'txg' 가 아니면 폴링 자체를 건너뜀
+//   - providerName='txg' 행만 claim (전역 프로바이더와 무관하게, 컴플레인 유저를
+//     관리자가 txg 라인으로 옮긴 행만 워커가 처리. Next.js는 비-txg 행만 처리하므로
+//     한 행을 양쪽이 집는 충돌/이중발송이 없음)
 //   - Kill Switch (GLOBAL_STOP/PAUSE) 시 처리 중단
 //   - 캠페인이 CANCELLED/COMPLETED/FAILED 면 스킵
 //   - 유저가 ACTIVE 가 아니면 스킵
@@ -42,18 +44,6 @@ interface ClaimedLog {
   messageBody: string;
   cost: number;
   retryCount: number;
-}
-
-/**
- * 활성 SMS 프로바이더가 TXG 인지 조회.
- * 그렇지 않으면 워커는 폴링을 건너뛴다 (Infobip/SMS.to 활성 시 워커가 임의로 발송 금지).
- */
-async function isTxgActive(): Promise<boolean> {
-  const setting = await prisma.systemSetting.findUnique({
-    where: { key: "active_sms_provider" },
-  });
-  const provider = (setting?.value as { provider?: string } | null)?.provider;
-  return provider === PROVIDER_NAME;
 }
 
 /** Kill Switch — GLOBAL_STOP/GLOBAL_PAUSE 시 모든 발송 중단 */
@@ -127,6 +117,7 @@ async function processCampaignOnce(
     WITH picked AS (
       SELECT id FROM "SmsLog"
       WHERE "campaignId" = ${campaignId}
+        AND "providerName" = 'txg'
         AND (status = 'PENDING' OR (status = 'RETRY_PENDING' AND "nextRetryAt" <= ${now}))
       ORDER BY "createdAt" ASC
       LIMIT ${batchSize}
@@ -522,7 +513,6 @@ export class CampaignPoller {
       return;
     }
 
-    if (!(await isTxgActive())) return;
     if (await isKillSwitchActive()) {
       logger.warn("[smpp-worker] Kill Switch 활성 — 발송 일시 중단");
       return;
@@ -534,6 +524,7 @@ export class CampaignPoller {
       by: ["campaignId"],
       where: {
         campaignId: { not: null },
+        providerName: "txg",
         OR: [
           { status: "PENDING" },
           { status: "RETRY_PENDING", nextRetryAt: { lte: now } },
